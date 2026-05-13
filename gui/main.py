@@ -4,16 +4,36 @@ import ctypes
 import os
 
 # ====================== 載入 C 引擎 ======================
+# 尋找 libra_engine.so 的位置
 lib_path = os.path.join(os.path.dirname(__file__), '..', 'c_engine', 'libra_engine.so')
 engine = ctypes.CDLL(lib_path)
 
+# ====================== 定義 C 語言的結構體 ======================
+# 1. 對應 C 語言的 Tile
+class Tile(ctypes.Structure):
+    _fields_ = [
+        ("type", ctypes.c_int),
+        ("value", ctypes.c_int)
+    ]
+
+# 2. 對應 C 語言的 Player
+class Player(ctypes.Structure):
+    _fields_ = [
+        ("player_id", ctypes.c_int),
+        ("hand", Tile * 50),
+        ("hand_count", ctypes.c_int),
+        ("suns", ctypes.c_int * 13),
+        ("score", ctypes.c_int)
+    ]
+
+# 3. 對應 C 語言的 GameState
 class GameState(ctypes.Structure):
     _fields_ = [
-        ("players", ctypes.c_void_p * 5),
+        ("players", Player * 5),            # 改用完整的 Player 結構
         ("num_players", ctypes.c_int),
-        ("deck", ctypes.c_void_p * 200),
+        ("deck", Tile * 200),               # 改用完整的 Tile 結構
         ("deck_size", ctypes.c_int),
-        ("auction_track", ctypes.c_void_p * 8),
+        ("auction_track", Tile * 8),
         ("auction_count", ctypes.c_int),
         ("sun_boat_position", ctypes.c_int),
         ("current_epoch", ctypes.c_int),
@@ -21,6 +41,7 @@ class GameState(ctypes.Structure):
         ("game_over", ctypes.c_int),
     ]
 
+# 設定 C 語言函數的參數型態
 engine.init_game.argtypes = [ctypes.POINTER(GameState), ctypes.c_int]
 engine.init_game.restype = None
 
@@ -32,11 +53,12 @@ class RaGameGUI:
         self.root.geometry("1024x680")
         self.root.configure(bg="#2c2f33")
 
-        # 使用支援中文的字型（Noto Sans CJK TC）
+        # 設定字型
         self.title_font = font.Font(family="Noto Sans CJK TC", size=48, weight="bold")
         self.subtitle_font = font.Font(family="Noto Sans CJK TC", size=24)
         self.button_font = font.Font(family="Noto Sans CJK TC", size=18, weight="bold")
 
+        # 建立遊戲狀態
         self.game_state = GameState()
 
         # 標題
@@ -63,9 +85,13 @@ class RaGameGUI:
 
     def start_new_game(self):
         try:
+            # 呼叫 C 引擎
             engine.init_game(ctypes.byref(self.game_state), 4)
+            # 讀取剛剛 C 語言設定好的真實玩家人數
+            actual_players = self.game_state.num_players
+            
             messagebox.showinfo("🎉 遊戲開始！", 
-                              "C 引擎初始化成功！\n\n玩家人數：4 人\n\n接下來我們會繼續加上拍賣區、牌堆、手繪圖片等功能！")
+                              f"C 引擎初始化成功！\n\n系統讀取到的玩家人數：{actual_players} 人")
         except Exception as e:
             messagebox.showerror("錯誤", f"C 引擎呼叫失敗：{e}")
 
