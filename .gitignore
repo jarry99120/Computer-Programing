@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# C 編譯產物
+*.o
+*.so
+*.out
+libra_engine.so
+
+# 其他
+.DS_Store
+Thumbs.db
+*.swp
