@@ -65,7 +65,7 @@ class RaGameGUI:
                            fg="#ffffff", bg="#2c2f33")
         subtitle.pack(pady=10)
 
-        # 開始按鈕（完全無 emoji）
+        # 開始按鈕
         start_btn = tk.Button(self.root, text="開始新遊戲 (4人)", font=self.button_font,
                              bg="#f1c40f", fg="#2c2f33", width=20, height=2,
                              command=self.start_new_game)
@@ -82,13 +82,9 @@ class RaGameGUI:
         try:
             engine.init_game(ctypes.byref(self.game_state), 4)
             actual_players = self.game_state.num_players
-            
-            messagebox.showinfo("遊戲開始！",
+            messagebox.showinfo("遊戲開始！", 
                               f"C 引擎初始化成功！\n\n系統讀取到的玩家人數：{actual_players} 人")
-            
-            # 終端機也印出資訊，方便除錯
             print(f"✅ 遊戲初始化完成！玩家人數：{actual_players}")
-            
         except Exception as e:
             messagebox.showerror("錯誤", f"C 引擎呼叫失敗：{e}")
 
