@@ -1,116 +1,168 @@
+# gui/main.py
 import tkinter as tk
-from tkinter import messagebox, font
-import ctypes
-import os
+from tkinter import messagebox, simpledialog, font
+import ctypes, os
 
-# ====================== 載入 C 引擎 ======================
+# ── C 引擎載入 ────────────────────────────────────────────
 lib_path = os.path.join(os.path.dirname(__file__), '..', 'c_engine', 'libra_engine.so')
 engine = ctypes.CDLL(lib_path)
 
-class GameState(ctypes.Structure):
+# ── 完整 struct（對應 game.h，順序不能錯）─────────────────
+class Tile(ctypes.Structure):
+    _fields_ = [("type", ctypes.c_int), ("value", ctypes.c_int)]
+
+class Player(ctypes.Structure):
     _fields_ = [
-        ("num_players", ctypes.c_int),
-        ("current_epoch", ctypes.c_int),
-        ("sun_boat_position", ctypes.c_int),
-        ("auction_count", ctypes.c_int),
-        ("current_player", ctypes.c_int),
-        ("game_over", ctypes.c_int),
+        ("player_id",  ctypes.c_int),
+        ("hand",       Tile * 50),
+        ("hand_count", ctypes.c_int),
+        ("suns",       ctypes.c_int * 13),
+        ("score",      ctypes.c_int),
     ]
 
-engine.init_game.argtypes = [ctypes.POINTER(GameState), ctypes.c_int]
-engine.init_game.restype = None
-engine.draw_tile.argtypes = [ctypes.POINTER(GameState)]
-engine.draw_tile.restype = ctypes.c_int   # 暫時簡化
-engine.conduct_auction.argtypes = [ctypes.POINTER(GameState)]
-engine.conduct_auction.restype = None
+class GameState(ctypes.Structure):
+    _fields_ = [
+        ("players",           Player * 5),
+        ("num_players",       ctypes.c_int),
+        ("deck",              Tile * 200),
+        ("deck_size",         ctypes.c_int),
+        ("auction_track",     Tile * 8),
+        ("auction_count",     ctypes.c_int),
+        ("sun_boat_position", ctypes.c_int),
+        ("current_epoch",     ctypes.c_int),
+        ("current_player",    ctypes.c_int),
+        ("game_over",         ctypes.c_int),
+    ]
 
-# ====================== GUI 主程式 ======================
+# ── 啟動驗證（確認 struct 對齊）──────────────────────────
+print(f"Tile={ctypes.sizeof(Tile)}B  Player={ctypes.sizeof(Player)}B  GameState={ctypes.sizeof(GameState)}B")
+
+# ── C 函式簽名 ────────────────────────────────────────────
+engine.init_game.argtypes = [ctypes.POINTER(GameState), ctypes.c_int]
+engine.init_game.restype  = None
+engine.draw_tile.argtypes = [ctypes.POINTER(GameState)]
+engine.draw_tile.restype  = Tile          # ← 回傳 Tile struct，不是 c_int！
+engine.conduct_auction.argtypes = [ctypes.POINTER(GameState)]
+engine.conduct_auction.restype  = None
+
+TILE_NAMES = {0:"Ra☀️", 1:"法老👑", 2:"災難💀", 3:"尼羅🌊", 4:"文明📜", 5:"金字塔🔺"}
+TILE_COLORS = {0:"#e74c3c", 1:"#9b59b6", 2:"#7f8c8d", 3:"#3498db", 4:"#27ae60", 5:"#e67e22"}
+
+# ── GUI ──────────────────────────────────────────────────
 class RaGameGUI:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("太陽神 Ra - 單機版")
+        self.root.title("☀️ 太陽神 Ra")
         self.root.geometry("1200x720")
         self.root.configure(bg="#2c2f33")
-
-        self.font = font.Font(family="Noto Sans CJK TC", size=14)
-        self.big_font = font.Font(family="Noto Sans CJK TC", size=18, weight="bold")
-
-        self.game_state = GameState()
+        self.fn = font.Font(family="Noto Sans CJK TC", size=14)
+        self.fb = font.Font(family="Noto Sans CJK TC", size=18, weight="bold")
+        self.gs = GameState()
         self.create_start_screen()
+        self.root.mainloop()   # ← 這行之前漏掉了！
 
+    def _clear(self):
+        for w in self.root.winfo_children(): w.destroy()
+
+    # ── 開始畫面 ─────────────────────────────────────────
     def create_start_screen(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
-
-        tk.Label(self.root, text="太陽神 Ra", 
-                 font=("Noto Sans CJK TC", 48, "bold"), fg="#f1c40f", bg="#2c2f33").pack(pady=80)
-
-        tk.Label(self.root, text="經典桌遊單機電腦版", 
-                 font=self.big_font, fg="#ffffff", bg="#2c2f33").pack(pady=20)
-
-        tk.Button(self.root, text="開始新遊戲 (4人)", font=self.big_font,
+        self._clear()
+        tk.Label(self.root, text="☀️ 太陽神 Ra",
+                 font=("Noto Sans CJK TC", 48, "bold"),
+                 fg="#f1c40f", bg="#2c2f33").pack(pady=80)
+        tk.Label(self.root, text="經典桌遊單機電腦版",
+                 font=self.fb, fg="#fff", bg="#2c2f33").pack(pady=10)
+        tk.Button(self.root, text="開始新遊戲 (4人)", font=self.fb,
                   bg="#f1c40f", fg="#2c2f33", width=25, height=3,
-                  command=self.start_new_game).pack(pady=80)
-
-        tk.Button(self.root, text="退出遊戲", font=self.font,
-                  bg="#e74c3c", fg="white", command=self.root.quit).pack(pady=10)
+                  command=self.start_new_game).pack(pady=60)
+        tk.Button(self.root, text="退出遊戲", font=self.fn,
+                  bg="#e74c3c", fg="white",
+                  command=self.root.quit).pack(pady=10)
 
     def start_new_game(self):
-        engine.init_game(ctypes.byref(self.game_state), 4)
-        messagebox.showinfo("遊戲開始！", f"C 引擎初始化成功！\n玩家人數：{self.game_state.num_players} 人")
+        engine.init_game(ctypes.byref(self.gs), 4)
+        print(f"✅ init 成功，玩家人數={self.gs.num_players}，牌堆={self.gs.deck_size}張")
+        messagebox.showinfo("遊戲開始！",
+                            f"初始化成功！\n玩家：{self.gs.num_players} 人\n牌堆：{self.gs.deck_size} 張")
         self.create_game_screen()
 
+    # ── 遊戲主畫面 ───────────────────────────────────────
     def create_game_screen(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
+        self._clear()
 
-        # 標題列
-        header = tk.Frame(self.root, bg="#2c2f33")
-        header.pack(fill="x", pady=10)
-        tk.Label(header, text=f"第 {self.game_state.current_epoch} 時代", 
-                 font=self.big_font, fg="#f1c40f", bg="#2c2f33").pack(side="left", padx=20)
-        tk.Label(header, text=f"目前玩家：{self.game_state.current_player + 1}", 
-                 font=self.big_font, fg="#ffffff", bg="#2c2f33").pack(side="right", padx=20)
+        # 頂部
+        top = tk.Frame(self.root, bg="#2c3e50", pady=8)
+        top.pack(fill="x")
+        tk.Label(top, text=f"第 {self.gs.current_epoch} 時代",
+                 font=self.fb, fg="#f1c40f", bg="#2c3e50").pack(side="left", padx=20)
+        tk.Label(top, text=f"太陽船：{self.gs.sun_boat_position} / 9",
+                 font=self.fb, fg="#e74c3c", bg="#2c3e50").pack(side="left", padx=20)
+        self.player_lbl = tk.Label(top, text="", font=self.fb, fg="#fff", bg="#2c3e50")
+        self.player_lbl.pack(side="right", padx=20)
 
         # 拍賣區
-        auction_frame = tk.Frame(self.root, bg="#34495e", relief="sunken", bd=2)
-        auction_frame.pack(pady=20, padx=30, fill="x")
-        tk.Label(auction_frame, text="拍賣區 (Auction Track)", font=self.big_font, 
-                 fg="white", bg="#34495e").pack(pady=8)
-        self.auction_labels = []
-        grid = tk.Frame(auction_frame, bg="#34495e")
-        grid.pack()
+        af = tk.Frame(self.root, bg="#34495e", pady=10)
+        af.pack(fill="x", padx=20, pady=10)
+        tk.Label(af, text="拍賣區 (Auction Track)",
+                 font=self.fb, fg="white", bg="#34495e").pack()
+        self.auction_lbls = []
+        row = tk.Frame(af, bg="#34495e"); row.pack()
         for i in range(8):
-            lbl = tk.Label(grid, text="□", font=("Noto Sans CJK TC", 24), width=4, height=2,
-                           bg="#ecf0f1", relief="ridge")
+            lbl = tk.Label(row, text="□", font=("Noto Sans CJK TC", 20),
+                           width=6, height=2, bg="#ecf0f1", relief="ridge")
             lbl.grid(row=0, column=i, padx=4, pady=4)
-            self.auction_labels.append(lbl)
-
-        # 太陽船
-        tk.Label(self.root, text=f"☀️ 太陽船位置：{self.game_state.sun_boat_position} / 9", 
-                 font=self.big_font, fg="#f1c40f", bg="#2c2f33").pack(pady=15)
+            self.auction_lbls.append(lbl)
 
         # 動作按鈕
-        btn_frame = tk.Frame(self.root, bg="#2c2f33")
-        btn_frame.pack(pady=30)
-        tk.Button(btn_frame, text="抽牌", font=self.big_font, width=12, height=2,
-                  command=self.draw_card).grid(row=0, column=0, padx=15)
-        tk.Button(btn_frame, text="召喚 Ra\n(開始競標)", font=self.big_font, width=15, height=2,
-                  command=self.call_ra).grid(row=0, column=1, padx=15)
+        bf = tk.Frame(self.root, bg="#2c2f33"); bf.pack(pady=25)
+        tk.Button(bf, text="抽牌", font=self.fb, width=12, height=2,
+                  bg="#27ae60", fg="white",
+                  command=self.action_draw).grid(row=0, column=0, padx=12)
+        tk.Button(bf, text="召喚 Ra (競標)", font=self.fb, width=12, height=2,
+                  bg="#e67e22", fg="white",
+                  command=self.action_ra).grid(row=0, column=1, padx=12)
 
-        # 返回按鈕
-        tk.Button(self.root, text="返回開始畫面", font=self.font,
-                  command=self.create_start_screen).pack(pady=20)
+        # 玩家得分
+        sf = tk.Frame(self.root, bg="#2c2f33"); sf.pack()
+        self.score_lbls = []
+        for i in range(self.gs.num_players):
+            lbl = tk.Label(sf, text=f"玩家{i+1}: 0分",
+                           font=self.fn, fg="white", bg="#2c3e50",
+                           width=16, pady=6, relief="ridge")
+            lbl.grid(row=0, column=i, padx=5)
+            self.score_lbls.append(lbl)
 
-    def draw_card(self):
-        # 呼叫 C 引擎抽牌
-        engine.draw_tile(ctypes.byref(self.game_state))
-        messagebox.showinfo("抽牌", f"已抽出一張牌！\n目前拍賣區有 {self.game_state.auction_count} 張牌")
-        # TODO: 之後會在拍賣區顯示實際牌圖
+        tk.Button(self.root, text="返回開始畫面", font=self.fn,
+                  command=self.create_start_screen).pack(pady=15)
+        self._refresh()
 
-    def call_ra(self):
-        engine.conduct_auction(ctypes.byref(self.game_state))
-        messagebox.showinfo("競標觸發", "Ra 牌出現！競標開始！\n（完整競標功能開發中）")
+    def _refresh(self):
+        cp = self.gs.current_player
+        self.player_lbl.config(text=f"玩家 {cp+1} 的回合")
+        for i, lbl in enumerate(self.auction_lbls):
+            if i < self.gs.auction_count:
+                t = self.gs.auction_track[i]
+                lbl.config(text=TILE_NAMES.get(t.type,"?"),
+                           bg=TILE_COLORS.get(t.type,"#95a5a6"), fg="white")
+            else:
+                lbl.config(text="□", bg="#ecf0f1", fg="#2c2f33")
+        for i in range(self.gs.num_players):
+            self.score_lbls[i].config(
+                text=f"玩家{i+1}: {self.gs.players[i].score}分",
+                bg="#f39c12" if i==cp else "#2c3e50",
+                fg="#2c2f33" if i==cp else "white")
+
+    def action_draw(self):
+        tile = engine.draw_tile(ctypes.byref(self.gs))
+        name = TILE_NAMES.get(tile.type, "未知")
+        messagebox.showinfo("抽牌",
+            f"抽到：{name}\n拍賣區：{self.gs.auction_count}/8 張\n牌堆剩：{self.gs.deck_size} 張")
+        self._refresh()
+
+    def action_ra(self):
+        engine.conduct_auction(ctypes.byref(self.gs))
+        messagebox.showinfo("競標", "競標結束，拍賣區已清空\n（完整競標功能開發中）")
+        self._refresh()
 
 if __name__ == "__main__":
     RaGameGUI()
