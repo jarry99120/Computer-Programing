@@ -29,6 +29,7 @@ class GameState(ctypes.Structure):
         ("current_epoch",     ctypes.c_int),
         ("current_player",    ctypes.c_int),
         ("game_over",         ctypes.c_int),
+        ("auction_active",    ctypes.c_int),
     ]
 
 print(f"Tile={ctypes.sizeof(Tile)}B  Player={ctypes.sizeof(Player)}B  GameState={ctypes.sizeof(GameState)}B")
@@ -51,24 +52,19 @@ TILE_COLORS = {0:"#e74c3c", 1:"#9b59b6", 2:"#7f8c8d", 3:"#3498db",
                4:"#27ae60", 5:"#e67e22", 6:"#f1c40f", 7:"#f39c12", 8:"#2980b9"}
 
 class AuctionDialog(tk.Toplevel):
-    """競標出價視窗：每位玩家輸入出價或 0 表示 Pass"""
     def __init__(self, parent, gs):
         super().__init__(parent)
         self.title("競標！")
         self.configure(bg="#2c2f33")
         self.resizable(False, False)
         self.gs = gs
-        self.result = None   # 存放各玩家出價的 list
-
+        self.result = None
         fn = font.Font(family="Noto Sans CJK TC", size=13)
         fb = font.Font(family="Noto Sans CJK TC", size=15, weight="bold")
-
         tk.Label(self, text="競標開始！",
                  font=fb, fg="#f1c40f", bg="#2c2f33").pack(pady=12)
         tk.Label(self, text=f"拍賣區共 {gs.auction_count} 張牌\n出價 0 = Pass",
                  font=fn, fg="#bdc3c7", bg="#2c2f33").pack(pady=4)
-
-        # 每位玩家一排輸入框
         self.entries = []
         form = tk.Frame(self, bg="#2c2f33")
         form.pack(padx=20, pady=10)
@@ -83,18 +79,15 @@ class AuctionDialog(tk.Toplevel):
             entry.insert(0, "0")
             entry.grid(row=i, column=1, padx=10)
             self.entries.append(entry)
-
         tk.Button(self, text="確認出價", font=fb,
                   bg="#27ae60", fg="white",
                   command=self._confirm).pack(pady=16)
-
-        # 讓視窗置中並等待
         self.grab_set()
         self.wait_window()
 
     def _confirm(self):
         bids = []
-        for i, e in enumerate(self.entries):
+        for e in self.entries:
             try:
                 val = int(e.get())
             except ValueError:
@@ -124,25 +117,33 @@ class RaGameGUI:
         self._clear()
         tk.Label(self.root, text="太陽神 Ra",
                  font=("Noto Sans CJK TC", 48, "bold"),
-                 fg="#f1c40f", bg="#2c2f33").pack(pady=80)
+                 fg="#f1c40f", bg="#2c2f33").pack(pady=60)
         tk.Label(self.root, text="經典桌遊單機電腦版",
                  font=self.fb, fg="#fff", bg="#2c2f33").pack(pady=10)
-        tk.Button(self.root, text="開始新遊戲 (4人)", font=self.fb,
-                  bg="#f1c40f", fg="#2c2f33", width=25, height=3,
-                  command=self.start_new_game).pack(pady=60)
+        tk.Label(self.root, text="選擇人數",
+                 font=self.fb, fg="#bdc3c7", bg="#2c2f33").pack(pady=20)
+        btn_frame = tk.Frame(self.root, bg="#2c2f33")
+        btn_frame.pack(pady=10)
+        for n in [2, 3, 4, 5]:
+            tk.Button(btn_frame,
+                      text=f"{n} 人遊戲",
+                      font=self.fb,
+                      bg="#f1c40f", fg="#2c2f33",
+                      width=10, height=2,
+                      command=lambda num=n: self.start_new_game(num)
+                      ).grid(row=0, column=n-2, padx=10)
         tk.Button(self.root, text="退出遊戲", font=self.fn,
                   bg="#e74c3c", fg="white",
-                  command=self.root.quit).pack(pady=10)
+                  command=self.root.quit).pack(pady=20)
 
-    def start_new_game(self):
-        engine.init_game(ctypes.byref(self.gs), 4)
+    def start_new_game(self, num_players=4):
+        engine.init_game(ctypes.byref(self.gs), num_players)
         messagebox.showinfo("遊戲開始！",
                             f"初始化成功！\n玩家：{self.gs.num_players} 人\n牌堆：{self.gs.deck_size} 張")
         self.create_game_screen()
 
     def create_game_screen(self):
         self._clear()
-
         top = tk.Frame(self.root, bg="#2c3e50", pady=8)
         top.pack(fill="x")
         self.epoch_lbl = tk.Label(top, text="", font=self.fb, fg="#f1c40f", bg="#2c3e50")
@@ -180,7 +181,7 @@ class RaGameGUI:
         for i in range(self.gs.num_players):
             lbl = tk.Label(sf, text="",
                            font=self.fn, fg="white", bg="#2c3e50",
-                           width=16, pady=6, relief="ridge")
+                           width=18, pady=6, relief="ridge")
             lbl.grid(row=0, column=i, padx=5)
             self.score_lbls.append(lbl)
 
@@ -202,14 +203,12 @@ class RaGameGUI:
                 lbl.config(text="", bg="#ecf0f1", fg="#2c2f33")
         for i in range(self.gs.num_players):
             p = self.gs.players[i]
-            suns = [p.suns[j] for j in range(13) if p.suns[j] > 0]
             self.score_lbls[i].config(
                 text=f"玩家{i+1}: {p.score}分\n手牌:{p.hand_count}張",
                 bg="#f39c12" if i == cp else "#2c3e50",
                 fg="#2c2f33" if i == cp else "white")
 
     def _do_auction(self):
-        """跳出競標視窗，呼叫 C 引擎結算"""
         if self.gs.auction_count == 0:
             messagebox.showinfo("競標", "拍賣區沒有牌，競標取消")
             return
@@ -222,9 +221,10 @@ class RaGameGUI:
         winner = engine.run_auction(ctypes.byref(self.gs), c_bids, len(bids))
         if winner >= 0:
             messagebox.showinfo("競標結果",
-                f"玩家 {winner+1} 以出價 {bids[winner]} 贏得競標！\n獲得拍賣區所有牌！")
+                f"玩家 {winner+1} 贏得競標！\n獲得拍賣區所有牌！")
         else:
             messagebox.showinfo("競標結果", "沒有人出價，拍賣區清空")
+        self._refresh()
 
     def action_draw(self):
         tile = engine.draw_tile(ctypes.byref(self.gs))
@@ -237,6 +237,10 @@ class RaGameGUI:
         else:
             messagebox.showinfo("抽牌",
                 f"抽到：{name}\n拍賣區：{self.gs.auction_count}/8 張\n牌堆剩：{self.gs.deck_size} 張")
+            if self.gs.auction_active:
+                messagebox.showinfo("拍賣區已滿！", "拍賣區 8 張已滿，強制開始競標！")
+                self.gs.auction_active = 0
+                self._do_auction()
         if self.gs.game_over:
             self._show_result()
             return
@@ -256,12 +260,8 @@ class RaGameGUI:
         tk.Label(self.root, text="遊戲結束！",
                  font=("Noto Sans CJK TC", 42, "bold"),
                  fg="#f1c40f", bg="#2c2f33").pack(pady=40)
-
-        # 找出勝者（分數最高）
         winner = max(range(self.gs.num_players),
                      key=lambda i: self.gs.players[i].score)
-
-        # 各玩家分數
         sf = tk.Frame(self.root, bg="#2c2f33")
         sf.pack(pady=20)
         for i in range(self.gs.num_players):
@@ -271,9 +271,9 @@ class RaGameGUI:
             prefix = "冠軍  " if is_winner else f"第{i+1}名  "
             tk.Label(sf,
                      text=f"{prefix}玩家 {i+1}：{score} 分",
-                     font=("Noto Sans CJK TC", 22, "bold" if is_winner else "normal"),
+                     font=("Noto Sans CJK TC", 22,
+                           "bold" if is_winner else "normal"),
                      fg=color, bg="#2c2f33").pack(pady=8)
-
         tk.Button(self.root, text="再玩一局",
                   font=("Noto Sans CJK TC", 16),
                   bg="#27ae60", fg="white", width=16, height=2,
@@ -285,6 +285,3 @@ class RaGameGUI:
 
 if __name__ == "__main__":
     RaGameGUI()
-
-# 注意：這段要手動貼進 RaGameGUI class 裡替換 action_draw
-# 先用 nano 開檔案確認位置

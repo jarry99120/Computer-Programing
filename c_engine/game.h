@@ -33,6 +33,7 @@ typedef struct {
     int current_epoch;
     int current_player;
     int game_over;
+    int auction_active;
 } GameState;
 
 void init_game(GameState* gs, int num_players);

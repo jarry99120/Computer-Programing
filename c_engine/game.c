@@ -43,17 +43,30 @@ void init_game(GameState* gs, int num_players) {
     gs->auction_count  = 0;
     gs->sun_boat_position = 0;
     int all_suns[] = {2,3,4,5,6,7,8,9,10,11,12,13};
-    int per_player = 3;
+    int total_suns = 12;
+    for (int i = total_suns - 1; i > 0; i--) {
+        int j = rand() % (i+1);
+	int tmp = all_suns[i];
+	all_suns[i] = all_suns[j];
+	all_suns[j] = tmp;
+    }
+    int per_player = total_suns / num_players;
+    int idx = 0;
     for (int p = 0; p < num_players; p++) {
-        gs->players[p].player_id  = p;
-        gs->players[p].score      = 0;
-        gs->players[p].hand_count = 0;
-        for (int s = 0; s < per_player; s++)
-            gs->players[p].suns[s] = all_suns[p * per_player + s];
+	gs -> players[p].player_id = p;
+	gs -> players[p].score = 0;
+	gs -> players[p].hand_count = 0;
+	for (int s = 0; s < per_player; s++) {
+	    gs -> players[p].suns[s] = all_suns[idx++];
+	printf("  玩家%d 籌碼：", p+1);
+	for (int s = 0; s < per_player; s++)
+	    printf("%d ", gs->players[p].suns[s]);
+	printf("\n");
     }
     init_deck(gs->deck, &gs->deck_size);
     shuffle_deck(gs->deck, gs->deck_size);
     printf("✅ 遊戲初始化完成！玩家人數：%d\n", num_players);
+}
 }
 
 Tile draw_tile(GameState* gs) {
@@ -68,9 +81,15 @@ Tile draw_tile(GameState* gs) {
         if (gs->sun_boat_position >= ra_track_max(gs->num_players))
             end_epoch(gs);
     } else {
-        if (gs->auction_count < AUCTION_TRACK_SIZE)
-            gs->auction_track[gs->auction_count++] = drawn;
-        printf("✅ 抽到牌 type=%d，拍賣區：%d/8\n", drawn.type, gs->auction_count);
+        if (gs->auction_count < AUCTION_TRACK_SIZE) {
+        	gs->auction_track[gs->auction_count++] = drawn;
+        	printf("✅ 抽到牌 type=%d，拍賣區：%d/8\n", drawn.type, gs->auction_count);
+    	}
+    	/* 拍賣區滿了 → 設旗標讓 Python 觸發競標 */
+    	if (gs->auction_count >= AUCTION_TRACK_SIZE) {
+        	printf("📦 拍賣區已滿！強制競標！\n");
+        	gs->auction_active = 1;
+    	}
     }
     return drawn;
 }
