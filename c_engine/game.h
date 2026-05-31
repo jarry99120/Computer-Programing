@@ -43,4 +43,8 @@ void conduct_auction(GameState* gs);
 int  is_epoch_over(GameState* gs);
 void end_epoch(GameState* gs);
 
+void next_player(GameState* gs);
+int run_auction(GameState* gs, int bids[], int num_bids);
+
+#include "scoring.h"
 #endif

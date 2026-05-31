@@ -1,4 +1,5 @@
 #include "game.h"
+#include "scoring.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,9 +96,44 @@ void end_epoch(GameState* gs) {
     gs->sun_boat_position = 0;
     if (gs->current_epoch >= 3) {
         gs->game_over = 1;
+    score_final(gs);
         printf("🏁 遊戲結束！\n");
     } else {
         gs->current_epoch++;
         printf("進入第 %d 時代！\n", gs->current_epoch);
     }
+}
+
+void next_player(GameState* gs) {
+    int tries = 0;
+    do {
+        gs->current_player = (gs->current_player + 1) % gs->num_players;
+        tries++;
+        if (tries > gs->num_players) return;  /* 所有人都沒籌碼，時代結束 */
+    } while (0);  /* 之後加入「沒籌碼就跳過」的邏輯 */
+    printf("輪到玩家 %d\n", gs->current_player);
+}
+
+/* 回傳出價成功的玩家index，沒人出價回傳 -1 */
+int run_auction(GameState* gs, int bids[], int num_bids) {
+    int best_player = -1;
+    int best_bid    = 0;
+    for (int i = 0; i < num_bids; i++) {
+        if (bids[i] > best_bid) {
+            best_bid    = bids[i];
+            best_player = i;
+        }
+    }
+    if (best_player >= 0) {
+        /* 勝者得到拍賣區所有牌 */
+        Player* winner = &gs->players[best_player];
+        for (int i = 0; i < gs->auction_count; i++)
+            winner->hand[winner->hand_count++] = gs->auction_track[i];
+        printf("競標勝者：玩家%d，出價%d，得到%d張牌\n",
+               best_player, best_bid, gs->auction_count);
+    } else {
+        printf("沒有人出價，拍賣區清空\n");
+    }
+    gs->auction_count = 0;
+    return best_player;
 }
