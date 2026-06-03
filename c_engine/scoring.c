@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 
-/* ── 工具：計算某玩家手牌中特定 type 的數量 ── */
 static int count_type(Player* p, TileType type) {
     int cnt = 0;
     for (int i = 0; i < p->hand_count; i++)
@@ -10,7 +9,6 @@ static int count_type(Player* p, TileType type) {
     return cnt;
 }
 
-/* ── 工具：計算文明牌種類數（value 0~4 各算一種）── */
 static int count_civ_types(Player* p) {
     int seen[5] = {0};
     for (int i = 0; i < p->hand_count; i++)
@@ -21,7 +19,6 @@ static int count_civ_types(Player* p) {
     return total;
 }
 
-/* ── 工具：移除手牌中所有特定 type 的牌 ── */
 static void discard_type(Player* p, TileType type) {
     int new_count = 0;
     for (int i = 0; i < p->hand_count; i++)
@@ -30,12 +27,43 @@ static void discard_type(Player* p, TileType type) {
     p->hand_count = new_count;
 }
 
-/* ── 每個時代結束計分 ─────────────────────────── */
+void resolve_disaster_immediate(Player* p, int disaster_value) {
+
+    int target_type = -1;
+    if (disaster_value == 0) target_type = TILE_NILE;
+    else if (disaster_value == 1) target_type = TILE_PHARAOH;
+    else if (disaster_value == 2) target_type = TILE_GOD;
+    else if (disaster_value == 3) target_type = TILE_CIVILIZATION;
+
+    if (target_type == -1) return;
+
+    int removed = 0;
+
+    for (int i = p->hand_count - 1; i >= 0 && removed < 2; i--) {
+        if (p->hand[i].type == target_type) {
+
+            p->hand[i] = p->hand[p->hand_count - 1];
+            p->hand_count--;
+            removed++;
+        }
+    }
+
+    if (disaster_value == 0 && removed < 2) {
+        for (int i = p->hand_count - 1; i >= 0 && removed < 2; i--) {
+            if (p->hand[i].type == TILE_FLOOD) {
+                p->hand[i] = p->hand[p->hand_count - 1];
+                p->hand_count--;
+                removed++;
+            }
+        }
+    }
+    printf("💥 [災難結算] 玩家 %d 被迫棄置了 %d 張對應的發展板塊。\n", p->player_id + 1, removed);
+}
+
 void score_epoch(GameState* gs) {
     int n = gs->num_players;
     printf("\n====== 第 %d 時代計分 ======\n", gs->current_epoch);
 
-    /* 1. 法老牌：最多 +5，最少 -2（全部一樣則不計分） */
     int pharaoh[5] = {0};
     int max_p = -1, min_p = 999;
     for (int i = 0; i < n; i++) {
@@ -52,7 +80,6 @@ void score_epoch(GameState* gs) {
         printf("  法老牌全部相同，不計分\n");
     }
 
-    /* 2. 神牌：每張 +2，之後丟棄 */
     for (int i = 0; i < n; i++) {
         int gods = count_type(&gs->players[i], TILE_GOD);
         if (gods > 0) {
@@ -62,7 +89,6 @@ void score_epoch(GameState* gs) {
         }
     }
 
-    /* 3. 金牌：每張 +3，之後丟棄 */
     for (int i = 0; i < n; i++) {
         int gold = count_type(&gs->players[i], TILE_GOLD);
         if (gold > 0) {
@@ -72,7 +98,6 @@ void score_epoch(GameState* gs) {
         }
     }
 
-    /* 4. 尼羅河 + 洪水（有洪水才計分）*/
     for (int i = 0; i < n; i++) {
         int nile  = count_type(&gs->players[i], TILE_NILE);
         int flood = count_type(&gs->players[i], TILE_FLOOD);
@@ -83,10 +108,9 @@ void score_epoch(GameState* gs) {
         } else {
             printf("  玩家%d 無洪水牌，尼羅河不計分\n", i+1);
         }
-        discard_type(&gs->players[i], TILE_FLOOD);  /* 洪水牌丟棄，尼羅河保留 */
+        discard_type(&gs->players[i], TILE_FLOOD); 
     }
 
-    /* 5. 文明牌：依種類數計分，之後丟棄 */
     for (int i = 0; i < n; i++) {
         int types = count_civ_types(&gs->players[i]);
         int pts = 0;
@@ -99,18 +123,15 @@ void score_epoch(GameState* gs) {
         discard_type(&gs->players[i], TILE_CIVILIZATION);
     }
 
-    /* 印出本時代結果 */
     printf("  ── 本時代結束後分數 ──\n");
     for (int i = 0; i < n; i++)
         printf("  玩家%d：%d 分\n", i+1, gs->players[i].score);
 }
 
-/* ── 第3時代額外計分 ─────────────────────────── */
 void score_final(GameState* gs) {
     int n = gs->num_players;
     printf("\n====== 最終額外計分 ======\n");
 
-    /* 1. 紀念碑（TILE_PYRAMID，value 0~7 代表 8 種）*/
     for (int i = 0; i < n; i++) {
         int counts[8] = {0};
         for (int j = 0; j < gs->players[i].hand_count; j++) {
@@ -119,7 +140,6 @@ void score_final(GameState* gs) {
                 counts[t.value % 8]++;
         }
 
-        /* 多樣性（有幾種不同紀念碑）*/
         int diversity = 0;
         for (int k = 0; k < 8; k++) if (counts[k] > 0) diversity++;
         int div_pts = 0;
@@ -128,7 +148,6 @@ void score_final(GameState* gs) {
         else                     div_pts = diversity;
         gs->players[i].score += div_pts;
 
-        /* 重複性（同種 3/4/5 張）*/
         int rep_pts = 0;
         for (int k = 0; k < 8; k++) {
             if      (counts[k] >= 5) rep_pts += 15;
@@ -140,21 +159,26 @@ void score_final(GameState* gs) {
                i+1, diversity, div_pts, rep_pts);
     }
 
-    /* 2. 太陽籌碼：總和最高 +5，最低 -5 */
     int sun_totals[5] = {0};
     int max_sun = -1, min_sun = 999999;
     for (int i = 0; i < n; i++) {
-        for (int j = 0; j < 13; j++)
-            sun_totals[i] += gs->players[i].suns[j];
+        for (int j = 0; j < 13; j++) {
+
+            if (gs->players[i].suns[j] > 0) {
+                sun_totals[i] += gs->players[i].suns[j];
+            }
+        }
         if (sun_totals[i] > max_sun) max_sun = sun_totals[i];
         if (sun_totals[i] < min_sun) min_sun = sun_totals[i];
     }
-    for (int i = 0; i < n; i++) {
-        if (sun_totals[i] == max_sun) { gs->players[i].score += 5; printf("  玩家%d 太陽籌碼最高(%d) +5\n", i+1, max_sun); }
-        if (sun_totals[i] == min_sun) { gs->players[i].score -= 5; printf("  玩家%d 太陽籌碼最低(%d) -5\n", i+1, min_sun); }
+
+    if (max_sun != min_sun) {
+        for (int i = 0; i < n; i++) {
+            if (sun_totals[i] == max_sun) { gs->players[i].score += 5; printf("  玩家%d 太陽籌碼最高(%d) +5\n", i+1, max_sun); }
+            if (sun_totals[i] == min_sun) { gs->players[i].score -= 5; printf("  玩家%d 太陽籌碼最低(%d) -5\n", i+1, min_sun); }
+        }
     }
 
-    /* 最終排名 */
     printf("\n====== 最終結果 ======\n");
     int winner = 0;
     for (int i = 0; i < n; i++) {

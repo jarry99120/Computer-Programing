@@ -19,6 +19,7 @@ typedef struct {
     Tile hand[MAX_HAND];
     int hand_count;
     int suns[13];
+    int sun_used[13];   // 💡 新增：記錄該籌碼在此時代是否已用過 (0:可用, 1:已蓋翻面)
     int score;
 } Player;
 
@@ -34,6 +35,7 @@ typedef struct {
     int current_player;
     int game_over;
     int auction_active;
+    int center_sun;     // 💡 新增：目前畫面上中央公共區的那枚太陽籌碼數字
 } GameState;
 
 void init_game(GameState* gs, int num_players);
@@ -47,5 +49,5 @@ void end_epoch(GameState* gs);
 void next_player(GameState* gs);
 int run_auction(GameState* gs, int bids[], int num_bids);
 
-#include "scoring.h"
+
 #endif
