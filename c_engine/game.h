@@ -1,3 +1,4 @@
+// ==================== game.h ====================
 #ifndef GAME_H
 #define GAME_H
 
@@ -19,7 +20,7 @@ typedef struct {
     Tile hand[MAX_HAND];
     int hand_count;
     int suns[13];
-    int sun_used[13];   // 💡 新增：記錄該籌碼在此時代是否已用過 (0:可用, 1:已蓋翻面)
+    int sun_used[13];   
     int score;
 } Player;
 
@@ -34,20 +35,25 @@ typedef struct {
     int current_epoch;
     int current_player;
     int game_over;
-    int auction_active;
-    int center_sun;     // 💡 新增：目前畫面上中央公共區的那枚太陽籌碼數字
+    
+    int auction_active;         
+    int center_sun;             
+    int highest_bid;            
+    int highest_bidder;         
+    int current_bidder;         
+    int auction_trigger_player; 
 } GameState;
 
+// 函式宣告
 void init_game(GameState* gs, int num_players);
 void shuffle_deck(Tile* deck, int size);
 Tile draw_tile(GameState* gs);
 int  add_to_auction(GameState* gs, Tile tile);
-void conduct_auction(GameState* gs);
+void conduct_auction(GameState* gs, int trigger_player, int is_forced);
 int  is_epoch_over(GameState* gs);
 void end_epoch(GameState* gs);
-
 void next_player(GameState* gs);
-int run_auction(GameState* gs, int bids[], int num_bids);
+int  player_bid(GameState* gs, int player_idx, int sun_value);
+int  run_auction(GameState* gs, int bids[], int num_bids);
 
-
-#endif
+#endif // GAME_H
