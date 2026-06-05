@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}首頁 — 太陽神 Ra{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center pt-32 animate-[fadeIn_0.4s_ease-out]">
+    <h1 class="text-6xl font-extrabold text-yellow-500 mb-4 tracking-widest drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)]">太陽神
+        RA</h1>
+    <p class="text-xl text-gray-400 mb-12 tracking-wide">經典桌遊 C 語言核心 × Flask 模組化網頁</p>
+
+    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 text-center max-w-sm w-full">
+        <h3 class="text-2xl mb-6 font-bold text-gray-200">建立新局</h3>
+        <p class="text-sm text-gray-400 mb-6">請選擇本局的遊戲玩家人數：</p>
+        <div class="grid grid-cols-2 gap-4">
+            <button onclick="startGame(2)"
+                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">2
+                人遊戲</button>
+            <button onclick="startGame(3)"
+                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">3
+                人遊戲</button>
+            <button onclick="startGame(4)"
+                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">4
+                人遊戲</button>
+            <button onclick="startGame(5)"
+                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">5
+                人遊戲</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function startGame(num) {
+        let res = await fetch('/api/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ num_players: num })
+        });
+        if (res.ok) {
+            // 💡 重點：開局成功後，直接跳轉到專屬的遊戲圖板頁面！
+            window.location.href = '/board';
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,97 @@
+<div id="auction-modal"
+    class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div
+        class="bg-gray-800 border border-gray-700 max-w-md w-full rounded-2xl p-6 shadow-2xl animate-[scaleIn_0.2s_ease-out]">
+        <h3 class="text-2xl font-black text-center text-yellow-500 mb-1 tracking-wide">🔥 神聖競標場 🔥</h3>
+        <p id="modal-center-info" class="text-center text-gray-400 text-xs mb-4"></p>
+
+        <div id="modal-voting-status"
+            class="bg-gray-900/90 p-4 rounded-xl mb-6 space-y-2.5 text-sm border border-gray-700/50"></div>
+
+        <div class="text-center">
+            <p id="modal-turn-prompt" class="font-bold text-base mb-4 text-gray-200">請玩家 - 選擇出價籌碼：</p>
+            <div id="modal-sun-buttons" class="flex flex-wrap justify-center gap-2 mb-5"></div>
+            <button onclick="castBid(0)"
+                class="w-full bg-red-600/90 hover:bg-red-500 text-white py-2.5 rounded-xl font-bold transition">
+                Pass (放棄此輪出價)
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let localBids = [];
+    let currentVoter = 0;
+    let votesCast = 0;
+
+    function openAuctionModal() {
+        localBids = new Array(gameState.num_players).fill(0);
+        currentVoter = gameState.current_bidder;
+        votesCast = 0;
+        document.getElementById('modal-center-info').innerText = `本池共計 ${gameState.auction_count} 張板塊 | 中央公共太陽：[${gameState.center_sun}]`;
+        document.getElementById('auction-modal').classList.remove('hidden');
+        askNextVoter();
+    }
+
+    function askNextVoter() {
+        if (votesCast >= gameState.num_players) { submitFinalBids(); return; }
+
+        // ... [前面原有的即時戰況看板代碼維持不變] ...
+
+        let pData = gameState.players[currentVoter];
+        let btnContainer = document.getElementById('modal-sun-buttons');
+        btnContainer.innerHTML = '';
+
+        // 🎯 修正：檢查是否「除了當前發起者外，前面所有人全部都 Pass 了」
+        let maxBidSoFar = Math.max(...localBids);
+        let isProhibitedPass = false;
+
+        // 如果是手動發起競標、且現在輪到發起者表態、且前面的出價全是 0
+        if (gameState.auction_count < 8 && currentVoter === gameState.current_player && maxBidSoFar === 0 && votesCast === gameState.num_players - 1) {
+            isProhibitedPass = true; // 觸發官方鐵則：發起者必須強制出價
+        }
+
+        pData.active_suns.forEach(sunVal => {
+            let btn = document.createElement('button');
+            btn.className = "bg-gradient-to-b from-yellow-400 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-gray-900 font-black px-4 py-2 rounded-xl text-sm transition shadow-md";
+            btn.innerText = `☀️ ${sunVal}`;
+            btn.onclick = () => castBid(sunVal);
+            btnContainer.appendChild(btn);
+        });
+
+        // 🎯 控制 Pass 按鈕的生死
+        let passBtn = document.querySelector("#auction-modal button[onclick='castBid(0)']");
+        if (isProhibitedPass) {
+            passBtn.disabled = true;
+            passBtn.className = "w-full bg-gray-600 text-gray-400 py-2.5 rounded-xl font-bold cursor-not-allowed";
+            passBtn.innerText = "❌ 規則限制：主動發起競拍者此輪不可 Pass！";
+        } else {
+            passBtn.disabled = false;
+            passBtn.className = "w-full bg-red-600/90 hover:bg-red-500 text-white py-2.5 rounded-xl font-bold transition";
+            passBtn.innerText = "Pass (放棄此輪出價)";
+        }
+    }
+
+    function castBid(val) {
+        let maxBid = Math.max(...localBids);
+        if (val > 0 && val <= maxBid) { alert(`出價必須大於目前最高出價 (☀️ ${maxBid})！`); return; }
+        localBids[currentVoter] = val;
+        currentVoter = (currentVoter + 1) % gameState.num_players;
+        votesCast++;
+        askNextVoter();
+    }
+
+    async function submitFinalBids() {
+        let res = await fetch('/api/submit_bids', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bids: localBids })
+        });
+        let data = await res.json();
+        gameState = data.game;
+        document.getElementById('auction-modal').classList.add('hidden');
+        if (data.winner >= 0) alert(`🎉 恭喜【玩家 ${data.winner + 1}】贏得此輪競標池！`);
+        else alert("💨 全員 Pass，此輪流標，板塊全數清空！");
+        renderUI(); // 呼叫 board.html 裡面的主刷新函式
+    }
+</script>

@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% block title %}遊戲圖板 — 太陽神 Ra{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8 animate-[fadeIn_0.4s_ease-out]">
+
+    <div
+        class="bg-gray-800 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center border border-gray-700 gap-4 mb-6 shadow-lg">
+        <div class="flex flex-wrap gap-6 text-lg font-bold justify-center">
+            <span id="lbl-epoch"
+                class="text-yellow-400 bg-yellow-400/10 px-3 py-1 rounded-md border border-yellow-400/20">載入中...</span>
+            <span id="lbl-ra-track" class="text-red-400 bg-red-400/10 px-3 py-1 rounded-md border border-red-400/20">Ra
+                軌道: -</span>
+            <span id="lbl-center-sun"
+                class="text-teal-400 bg-teal-400/10 px-3 py-1 rounded-md border border-teal-400/20">☯️ 中央公共太陽:
+                [-]</span>
+        </div>
+        <div id="lbl-current-turn"
+            class="text-lg font-black bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 px-6 py-1.5 rounded-full shadow">
+            讀取中...
+        </div>
+    </div>
+
+    <div class="bg-gray-800/80 backdrop-blur p-6 rounded-2xl border border-gray-700 mb-8 shadow-xl text-center">
+        <h2 class="text-lg font-bold mb-4 text-gray-400 uppercase tracking-wider">拍賣區 (Auction Track)</h2>
+        <div id="auction-track-box" class="grid grid-cols-4 sm:grid-cols-8 gap-3 justify-center min-h-[100px] mb-6">
+        </div>
+
+        <div id="action-buttons-group" class="flex justify-center gap-4">
+            <button onclick="drawTile()"
+                class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95">🎲
+                抽牌</button>
+            <button onclick="callRa()"
+                class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95">☀️
+                召喚 RA (主動競標)</button>
+        </div>
+    </div>
+
+    <h2 class="text-xl font-bold mb-4 text-gray-400 px-1">👥 玩家陣營面板</h2>
+    <div id="players-board" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-6"></div>
+</div>
+
+{% include 'auction_modal.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let gameState = null;
+    const TILE_COLORS = { 0: "bg-red-600 border-red-500 text-white", 1: "bg-purple-600 border-purple-500 text-white", 2: "bg-zinc-600 border-zinc-500 text-white", 3: "bg-blue-600 border-blue-500 text-white", 4: "bg-emerald-600 border-emerald-500 text-white", 5: "bg-amber-600 border-amber-500 text-white", 6: "bg-yellow-400 border-yellow-300 text-gray-950 font-black", 7: "bg-yellow-600 border-yellow-500 text-white", 8: "bg-cyan-600 border-cyan-500 text-white" };
+
+    // 網頁開啟時，主動跟後端要最新的遊戲資料
+    window.addEventListener('DOMContentLoaded', fetchCurrentState);
+
+    async function fetchCurrentState() {
+        let res = await fetch('/api/state');
+        if (res.status === 400) {
+            // 防呆：如果根本沒開局，自動退回首頁
+            window.location.href = '/';
+            return;
+        }
+        gameState = await res.json();
+        renderUI();
+    }
+
+    function renderUI() {
+        if (!gameState) return;
+
+        document.getElementById('lbl-epoch').innerText = `第 ${gameState.current_epoch} 時代`;
+        document.getElementById('lbl-ra-track').innerText = `Ra 軌道: ${gameState.sun_boat_position}/9`;
+        document.getElementById('lbl-center-sun').innerText = `☯️ 中央公共太陽: [${gameState.center_sun}]`;
+
+        let turnLbl = document.getElementById('lbl-current-turn');
+        if (gameState.game_over) {
+            turnLbl.innerText = `🏁 遊戲結束！`;
+            turnLbl.className = "text-lg font-black bg-red-600 text-white px-6 py-1.5 rounded-full shadow animate-pulse";
+            document.getElementById('action-buttons-group').innerHTML = `<button onclick="window.location.href='/'" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-3 rounded-xl text-lg transition">返回大廳</button>`;
+        } else {
+            turnLbl.innerText = `玩家 ${gameState.current_player + 1} 的回合`;
+        }
+
+        // 渲染板塊
+        let trackBox = document.getElementById('auction-track-box');
+        trackBox.innerHTML = '';
+        for (let i = 0; i < 8; i++) {
+            let cell = document.createElement('div');
+            if (i < gameState.auction_track.length) {
+                let tile = gameState.auction_track[i];
+                cell.innerText = tile.name;
+                cell.className = `h-24 border-2 rounded-xl flex items-center justify-center font-bold text-lg shadow-md ${TILE_COLORS[tile.type_id] || 'bg-gray-500 border-gray-400'}`;
+            } else {
+                cell.className = "h-24 border-2 border-dashed border-gray-700 rounded-xl flex items-center justify-center text-gray-600 font-medium text-sm bg-gray-900/30";
+                cell.innerText = `格 ${i + 1}`;
+            }
+            trackBox.appendChild(cell);
+        }
+
+        // 渲染玩家
+        let pBoard = document.getElementById('players-board');
+        pBoard.innerHTML = '';
+        gameState.players.forEach((p, idx) => {
+            let isCurrent = (idx === gameState.current_player);
+            let card = document.createElement('div');
+            card.className = `p-5 rounded-2xl border transition duration-300 ${isCurrent ? 'bg-gray-800 text-white border-yellow-500 shadow-xl' : 'bg-gray-800/60 text-gray-300 border-gray-700/70'}`;
+            card.innerHTML = `
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-base font-black ${isCurrent ? 'text-yellow-400' : 'text-gray-200'}">玩家 ${p.player_id} ${isCurrent ? '👑' : ''}</span>
+                    <span class="text-xs px-2 py-0.5 rounded font-bold ${isCurrent ? 'bg-yellow-500 text-gray-950' : 'bg-gray-700 text-gray-400'}">得分: ${p.score}</span>
+                </div>
+                <div class="space-y-1 text-xs">
+                    <p class="text-gray-400">擁有手牌板塊：<span class="font-bold text-gray-200 text-sm">${p.hand_count}</span> 張</p>
+                    <div class="pt-2 mt-2 border-t border-gray-700/50">
+                        <span class="block text-[11px] uppercase font-bold text-emerald-400 mb-1">可用太陽籌碼</span>
+                        <div class="flex flex-wrap gap-1 min-h-[20px]">
+                            ${p.active_suns.map(s => `<span class="bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 px-1.5 py-0.5 rounded text-[10px]">☀️ ${s}</span>`).join('') || '<span class="text-gray-500 italic">無</span>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+            pBoard.appendChild(card);
+        });
+
+        // 觸發對話框檢查 (定義在下面引入的獨立檔案中)
+        if (gameState.auction_active && document.getElementById('auction-modal').classList.contains('hidden')) {
+            openAuctionModal();
+        }
+    }
+
+    async function drawTile() {
+        let res = await fetch('/api/draw', { method: 'POST' });
+        let data = await res.json();
+        gameState = data.game;
+
+        // 先刷新整個大圖板（這時 gameState.auction_active 已經是 1 了）
+        renderUI();
+
+        // 如果是強制競標，除了噴 alert，還要立刻主動打開 Modal
+        if (data.forced_auction) {
+            alert("🚨 警告：拍賣軌道 8 格已滿！天神發怒，立刻強制進入大會競標程序！");
+            if (typeof openAuctionModal === "function") {
+                openAuctionModal(); // 💡 強制呼叫彈出視窗
+            }
+        }
+    }
+
+    async function callRa() {
+        let res = await fetch('/api/call_ra', { method: 'POST' });
+        if (res.status === 400) { alert((await res.json()).message); return; }
+        let data = await res.json();
+        gameState = data.game;
+        renderUI();
+    }
+</script>
+{% endblock %}
