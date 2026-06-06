@@ -1,12 +1,16 @@
-#include "game.h"     // 💡 先引入核心結構
-#include "scoring.h"  // 💡 再引入計分模組
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "game.h"
+#include "scoring.h" // 完美串接時代結束(score_epoch)與終局(score_final)的計分模組
 
-// 內部輔助函式：檢查玩家是否有可用（未翻面）的籌碼
-static int has_available_suns(Player* p) {
+// =================================================================
+// 📦 區塊一：核心基礎與輔助函式 (原 game_core.c 基礎部分)
+// =================================================================
+
+// 內部輔助函式：檢查玩家是否有可用（未翻面鎖定）的籌碼
+int has_available_suns(Player* p) {
     for (int i = 0; i < 13; i++) {
         if (p->suns[i] > 0 && p->sun_used[i] == 0) {
             return 1; 
@@ -15,7 +19,7 @@ static int has_available_suns(Player* p) {
     return 0;
 }
 
-// 輔助洗牌函式：將袋子裡的板塊隨機打亂 (Fisher-Yates Shuffle)
+// 輔助洗牌函式：Fisher-Yates Shuffle
 void shuffle_deck(Tile *deck, int size) {
     for (int i = size - 1; i > 0; i--) {
         int j = rand() % (i + 1);
@@ -31,162 +35,188 @@ static int ra_track_max(int num_players) {
     return maxes[num_players];
 }
 
-// 完整的遊戲初始化函式 (嚴格對齊官方規則)
-void init_game(GameState *gs, int num_players) {
-    // 安全防呆：限制人數在 2 到 5 人之間
+// 遊戲初始化
+void init_game(GameState* gs, int num_players) {
+    // 1. 核心防禦：先把整個結構體的記憶體全部清空為 0，防止隨機垃圾值干擾狀態機
+    memset(gs, 0, sizeof(GameState));
+
+    // 人數安全限制 (德式標準 2~5 人局，預設 3 人)
     if (num_players < 2 || num_players > 5) {
-        num_players = 4; 
+        num_players = 3; 
     }
-
-    // 1. 初始化基礎全域遊戲狀態
     gs->num_players = num_players;
-    gs->current_epoch = 1;          // 從第 1 時代開始
-    gs->sun_boat_position = 0;      // 太陽船軌道歸零
-    gs->auction_count = 0;          // 拍賣區初始空無一物
-    gs->auction_active = 0;         // 初始非競標狀態
-    gs->game_over = 0;              // 遊戲未結束
     
-    // 官方規則：1 號太陽籌碼初始放在桌面中央作為公共籌碼
-    gs->center_sun = 1;
+    // 初始化全域基本遊戲狀態
+    gs->current_epoch = 1;         // 起始時代為第 1 時代
+    gs->sun_boat_position = 0;     // 太陽船歸零
+    gs->auction_count = 0;         // 拍賣軌清空
+    gs->game_over = 0;             // 遊戲未結束
+    gs->auction_active = 0;        // 競標狀態機關閉
 
-    // 2. 初始化所有玩家的基礎數值
+    // ==================== 📦 牌堆板塊填充 (共 180 張) ====================
+    int deck_idx = 0;
+
+    // A. 文明板塊 (Civilization) : 25個 (5種型號，各5張)
+    for (int v = 1; v <= 5; v++) {
+        for (int i = 0; i < 5; i++) {
+            gs->deck[deck_idx].type = TILE_CIVILIZATION; // ID: 4
+            gs->deck[deck_idx].value = v;
+            deck_idx++;
+        }
+    }
+
+    // B. 建築/金字塔板塊 (Pyramid) : 40個 (8種型號，各5張)
+    for (int v = 1; v <= 8; v++) {
+        for (int i = 0; i < 5; i++) {
+            gs->deck[deck_idx].type = TILE_PYRAMID; // ID: 5
+            gs->deck[deck_idx].value = v;
+            deck_idx++;
+        }
+    }
+
+    // C. 河流板塊 : 總計 37個
+    // 尼羅河 (Nile) : 25個
+    for (int i = 0; i < 25; i++) {
+        gs->deck[deck_idx].type = TILE_NILE; // ID: 3
+        gs->deck[deck_idx].value = 0;
+        deck_idx++;
+    }
+    // 洪水 (Flood) : 12個
+    for (int i = 0; i < 12; i++) {
+        gs->deck[deck_idx].type = TILE_FLOOD; // ID: 8
+        gs->deck[deck_idx].value = 0;
+        deck_idx++;
+    }
+
+    // D. 法老板塊 (Pharaoh) : 25個
+    for (int i = 0; i < 25; i++) {
+        gs->deck[deck_idx].type = TILE_PHARAOH; // ID: 1
+        gs->deck[deck_idx].value = 0;
+        deck_idx++;
+    }
+
+    // E. 太陽神拉板塊 (Ra) : 30個
+    for (int i = 0; i < 30; i++) {
+        gs->deck[deck_idx].type = TILE_RA; // ID: 0
+        gs->deck[deck_idx].value = 0;
+        deck_idx++;
+    }
+
+    // F. 神明板塊 (God) : 8個
+    for (int i = 0; i < 8; i++) {
+        gs->deck[deck_idx].type = TILE_GOD; // ID: 6
+        gs->deck[deck_idx].value = 0;
+        deck_idx++;
+    }
+
+    // G. 黃金板塊 (Gold) : 5個
     for (int i = 0; i < 5; i++) {
-        gs->players[i].player_id = i;
-        gs->players[i].hand_count = 0;
-        gs->players[i].score = 5;    // 💡 官方規則：每位玩家起手發予 5 分
-        
-        // 清空手牌與籌碼槽
-        for (int j = 0; j < 50; j++) {
-            gs->players[i].hand[j].type = -1;
-            gs->players[i].hand[j].value = 0;
-        }
-        for (int j = 0; j < 13; j++) {
-            gs->players[i].suns[j] = 0;
-            gs->players[i].sun_used[j] = 0;
-        }
+        gs->deck[deck_idx].type = TILE_GOLD; // ID: 7
+        gs->deck[deck_idx].value = 0;
+        deck_idx++;
     }
 
-    // 3. 🎯 嚴格遵循官方設定，依人數指派太陽籌碼
-    if (num_players == 3) {
-        int suns_3p[3][4] = {
-            {2, 5, 8, 13},   // 玩家 A (Index 0)
-            {3, 6, 9, 12},   // 玩家 B (Index 1)
-            {4, 7, 10, 11}   // 玩家 C (Index 2)
-        };
-        for (int p = 0; p < 3; p++) {
-            for (int s = 0; s < 4; s++) {
-                gs->players[p].suns[s] = suns_3p[p][s];
-            }
-        }
-    } 
-    else if (num_players == 4) {
-        int suns_4p[4][3] = {
-            {2, 6, 13},      // 玩家 A
-            {3, 7, 12},      // 玩家 B
-            {4, 8, 11},      // 玩家 C
-            {5, 9, 10}       // 玩家 D
-        };
-        for (int p = 0; p < 4; p++) {
-            for (int s = 0; s < 3; s++) {
-                gs->players[p].suns[s] = suns_4p[p][s];
-            }
-        }
-    } 
-    else if (num_players == 5) {
-        int suns_5p[5][3] = {
-            {2, 7, 16},      // 玩家 A
-            {3, 8, 15},      // 玩家 B
-            {4, 9, 14},      // 玩家 C
-            {5, 10, 13},     // 玩家 D
-            {6, 11, 12}      // 玩家 E
-        };
-        for (int p = 0; p < 5; p++) {
-            for (int s = 0; s < 3; s++) {
-                gs->players[p].suns[s] = suns_5p[p][s];
-            }
-        }
-    }
-    else if (num_players == 2) {
-        int suns_2p[2][4] = {{2, 4, 6, 8}, {3, 5, 7, 9}};
-        for (int p = 0; p < 2; p++) {
-            for (int s = 0; s < 4; s++) gs->players[p].suns[s] = suns_2p[p][s];
-        }
+    // H. 災難板塊 (Disaster) : 10個 (4種型號配比)
+    int disaster_values[10] = {1, 1, 2, 2, 2, 3, 3, 4, 4, 4};
+    for (int i = 0; i < 10; i++) {
+        gs->deck[deck_idx].type = TILE_DISASTER; // ID: 2
+        gs->deck[deck_idx].value = disaster_values[i];
+        deck_idx++;
     }
 
-    // 4. 🎯 尋找全場擁有最大太陽籌碼的玩家，作為起手玩家
-    int max_sun_val = -1;
-    int starting_player = 0;
+    // 牌堆數量防禦檢查
+    if (deck_idx != 180) {
+        printf("[C Error] 警告！初始化牌堆總數為 %d，與預期的 180 張不符！\n", deck_idx);
+    } else {
+        printf("[C Core] 成功初始化自訂牌堆，總計共 %d 張板塊。\n", deck_idx);
+    }
+    gs->deck_size = deck_idx;
 
-    for (int p = 0; p < num_players; p++) {
+    // ==================== 🪙 玩家起始太陽籌碼官方設定集 ====================
+    // 陣列維度：[人數局][玩家Index][籌碼槽]
+    int starter_suns[6][5][13] = {
+        { {0} }, // 0人局 (未使用)
+        { {0} }, // 1人局 (未使用)
+        { // 2人局
+            {9, 11, 13, 15}, {8, 10, 12, 14}
+        },
+        { // 3人局 🎯 
+            {2, 5, 8, 11},   {3, 6, 9, 12},   {4, 7, 10, 13}
+        },
+        { // 4人局
+            {4, 7, 12},      {5, 6, 11},      {2, 9, 10},      {3, 8, 13}
+        },
+        { // 5人局
+            {2, 11},         {3, 10},         {4, 9},          {5, 8},          {6, 7}
+        }
+    };
+
+    // 根據官方规则設定「中央公共太陽」的初始值（3人與4人局起手皆為 1）
+    gs->center_sun = 1; 
+
+    // ==================== 👤 玩家個人資產槽初始化 ====================
+    for (int p = 0; p < gs->num_players; p++) {
+        gs->players[p].player_id = p; // 保持 0-based，與 Python 橋樑完美接軌
+        gs->players[p].hand_count = 0;
+        gs->players[p].score = 10;    // 依據 Ra 規則，起手發 10 分糖果籌碼，避免開局扣到負數
+
+        // 將手牌槽全部清空初始化為 -1
+        for (int h = 0; h < 50; h++) {
+            gs->players[p].hand[h].type = -1;
+            gs->players[p].hand[h].value = 0;
+        }
+
+        // 從設定集精準發放太陽籌碼
+        int sun_count = 0;
         for (int s = 0; s < 13; s++) {
-            if (gs->players[p].suns[s] > max_sun_val) {
-                max_sun_val = gs->players[p].suns[s];
-                starting_player = p;
+            int val = starter_suns[gs->num_players][p][s];
+            if (val > 0) {
+                gs->players[p].suns[sun_count] = val;
+                gs->players[p].sun_used[sun_count] = 0; // 0 = 正面可用（未翻面鎖定）
+                sun_count++;
+            } else {
+                gs->players[p].suns[s] = 0;
+                gs->players[p].sun_used[s] = 0;
             }
         }
-    }
-    gs->current_player = starting_player; // 💡 鎖定由他開始第一回合
-
-    // 5. 📦 建立牌組袋子 (Deck) 並放入所有官方常規板塊
-    int idx = 0;
-
-    // (A) 放入 30 張太陽神 Ra 板塊
-    for (int i = 0; i < 30; i++) { gs->deck[idx].type = TILE_RA; gs->deck[idx].value = 0; idx++; }
-    // (B) 放入 25 張法老板塊 (Pharaoh)
-    for (int i = 0; i < 25; i++) { gs->deck[idx].type = TILE_PHARAOH; gs->deck[idx].value = 0; idx++; }
-    // (C) 放入 16 張金字塔板塊 (Pyramid)
-    for (int i = 0; i < 16; i++) { gs->deck[idx].type = TILE_PYRAMID; gs->deck[idx].value = i % 8; idx++; }
-    // (D) 放入 12 張金幣板塊 (Gold)
-    for (int i = 0; i < 12; i++) { gs->deck[idx].type = TILE_GOLD; gs->deck[idx].value = 0; idx++; }
-    // (E) 放入 25 張尼羅河板塊 (Nile) 與 12 張洪水板塊 (Flood)
-    for (int i = 0; i < 25; i++) { gs->deck[idx].type = TILE_NILE; gs->deck[idx].value = 0; idx++; }
-    for (int i = 0; i < 12; i++) { gs->deck[idx].type = TILE_FLOOD; gs->deck[idx].value = 0; idx++; }
-    // (F) 放入文明板塊 (Civilization) - 5 種不同類型各 5 張 = 25 張
-    for (int type_val = 1; type_val <= 5; type_val++) {
-        for (int i = 0; i < 5; i++) { gs->deck[idx].type = TILE_CIVILIZATION; gs->deck[idx].value = type_val; idx++; }
-    }
-    // (G) 放入 8 張阿努比斯神明板塊 (God)
-    for (int i = 0; i < 8; i++) { gs->deck[idx].type = TILE_GOD; gs->deck[idx].value = 0; idx++; }
-    // (H) 放入災難板塊 (Disaster) - 4 種災難各 2 張 = 8 張
-    for (int dis_val = 1; dis_val <= 4; dis_val++) {
-        for (int i = 0; i < 2; i++) { gs->deck[idx].type = TILE_DISASTER; gs->deck[idx].value = dis_val; idx++; }
+        printf("[C Core] 玩家 %d 初始化完畢，成功發放 %d 枚可用太陽籌碼。\n", p + 1, sun_count);
     }
 
-    gs->deck_size = idx; // 統計總板塊數
-
-    // 6. 🎲 亂數洗牌
+    // 3. 最後進行全面洗牌，打亂 180 張板塊
     shuffle_deck(gs->deck, gs->deck_size);
+    printf("[C Core] 核心初始隨機洗牌完成，遊戲準備就緒。\n");
 }
 
-// 抽牌邏輯
+// 抽牌核心邏輯
 Tile draw_tile(GameState* gs) {
     Tile empty = {-1, 0};
-    if (gs->deck_size <= 0) return empty;
-    if (gs->auction_active) return empty; // 競標中不允許抽牌
+    
+    // 安全防禦：如果牌堆空了、遊戲結束了、或是競標中，不允許抽牌
+    if (gs->deck_size <= 0 || gs->auction_active || gs->game_over) return empty;
 
     gs->deck_size--;
     Tile drawn = gs->deck[gs->deck_size];
     
     if (drawn.type == TILE_RA) {
         gs->sun_boat_position++;
-        printf("☀️  Ra 牌！Ra軌道：%d/%d\n",
-               gs->sun_boat_position, ra_track_max(gs->num_players));
-        
-        if (gs->sun_boat_position >= ra_track_max(gs->num_players)) {
+        // 3人局上限是 8 格
+        int max_track = ra_track_max(gs->num_players);
+        if (max_track <= 0) max_track = 8; // 萬一讀到垃圾值的防呆基準線
+
+        if (gs->sun_boat_position >= max_track) {
+            printf("[C Core] 太陽船達到上限 (%d/%d)，觸發時代結束！\n", gs->sun_boat_position, max_track);
             end_epoch(gs);
         } else {
-            // 抽到 Ra 牌，強制引發競標，類型標記為 0 (Ra 觸發)
             conduct_auction(gs, gs->current_player, 0); 
         }
     } else {
         if (gs->auction_count < AUCTION_TRACK_SIZE) {
             gs->auction_track[gs->auction_count++] = drawn;
-            printf("✅ 抽到牌 type=%d，拍賣區：%d/8\n", drawn.type, gs->auction_count);
         }
-
-        // 拍賣區滿 8 張，強制觸發競標，類型標記為 1 (8格滿強制)
+        
+        // 滿 8 格觸發強制競標
         if (gs->auction_count >= AUCTION_TRACK_SIZE) {
-            printf("📦 拍賣區已滿！強制競標！\n");
+            printf("[C Core] 拍賣軌滿 8 格，觸發強制競標！\n");
             conduct_auction(gs, gs->current_player, 1); 
         }
     }
@@ -199,60 +229,7 @@ int add_to_auction(GameState* gs, Tile tile) {
     return 1;
 }
 
-// 觸發與初始化競標狀態機
-// is_forced: 0 = 抽到Ra或主動喊Ra；1 = 8格滿被動強制觸發
-void conduct_auction(GameState* gs, int trigger_player, int is_forced) {
-    printf("🔥 競標狀態機啟動！原因代碼：%d | 拍賣區：%d 張牌\n", is_forced, gs->auction_count);
-    
-    gs->auction_active = 1;
-    gs->highest_bid = 0;
-    gs->highest_bidder = -1;
-    gs->auction_trigger_player = trigger_player;
-    gs->center_sun = is_forced; // 💡 巧妙利用原 center_sun 空間或保留此變數供 player_bid 區分流標類型
-
-    // 由發起人的下一位玩家開始順時針出價
-    gs->current_bidder = (trigger_player + 1) % gs->num_players;
-    
-    // 尋找第一個有籌碼的合法出價者
-    int loop_count = 0;
-    while (!has_available_suns(&gs->players[gs->current_bidder]) && loop_count < gs->num_players) {
-        gs->current_bidder = (gs->current_bidder + 1) % gs->num_players;
-        loop_count++;
-    }
-}
-
-int is_epoch_over(GameState* gs) {
-    return gs->sun_boat_position >= ra_track_max(gs->num_players);
-}
-
-// 結束時代與結算
-void end_epoch(GameState* gs) {
-    printf("====== 第 %d 時代結束 ======\n", gs->current_epoch);
-    
-    score_epoch(gs);
-
-    gs->auction_count     = 0;
-    gs->sun_boat_position = 0;
-    gs->auction_active    = 0;
-
-    // 將所有玩家的籌碼恢復為「未翻面（可用）」
-    for (int p = 0; p < gs->num_players; p++) {
-        for (int s = 0; s < 13; s++) {
-            gs->players[p].sun_used[s] = 0;
-        }
-    }
-
-    if (gs->current_epoch >= 3) {
-        gs->game_over = 1;
-        score_final(gs);
-        printf("🏁 遊戲結束！\n");
-    } else {
-        gs->current_epoch++;
-        printf("進入第 %d 時代！\n", gs->current_epoch);
-    }
-}
-
-// 輪到下一位有籌碼的玩家抽牌/喊Ra
+// 輪替到下一位有可用籌碼的玩家
 void next_player(GameState* gs) {
     if (gs->auction_active) return; 
 
@@ -265,7 +242,6 @@ void next_player(GameState* gs) {
     }
 
     if (all_out) {
-        printf("⚠️ 所有玩家均無可用籌碼！提前結束此時代。\n");
         end_epoch(gs);
         return;
     }
@@ -276,15 +252,147 @@ void next_player(GameState* gs) {
         tries++;
         if (tries > gs->num_players) return; 
     } while (!has_available_suns(&gs->players[gs->current_player]));
-
-    printf("輪到玩家 %d (擁有可用籌碼)\n", gs->current_player + 1);
 }
 
-// 獨立結算得標與籌碼交換
-static void resolve_auction_win(GameState* gs, int winner_idx, int win_bid) {
+
+// =================================================================
+// 🔨 區塊二：德式競標狀態機核心 (原 game_auction.c 部分)
+// =================================================================
+
+// 啟動競標狀態機
+void conduct_auction(GameState* gs, int trigger_player, int is_forced) {
+    gs->auction_active = 1;
+    gs->highest_bid = 0;
+    gs->highest_bidder = -1;
+    gs->auction_trigger_player = trigger_player;
+    
+    // 🎯 修正：在 game.h 中加一個變數（或借用現有未用欄位），這裡先將 8 格滿強制競標標記保存
+    // 假設你在 game.h 的 GameState 有定義一個額外狀態，若無，我們可以使用一個獨立邏輯
+    // 這裡我們暫時借用 trigger_player 的特殊標記，或者用全新安全計數器。
+    
+    // 拍賣順序：從觸發者的下一位玩家開始
+    gs->current_bidder = (trigger_player + 1) % gs->num_players;
+    
+    // 🎯 修正 1 的輔助：如果下一位沒籌碼，自動跳到下一個，直到所有人找過一輪
+    int loop_count = 0;
+    while (!has_available_suns(&gs->players[gs->current_bidder]) && loop_count < gs->num_players) {
+        gs->current_bidder = (gs->current_bidder + 1) % gs->num_players;
+        loop_count++;
+    }
+}
+
+// 逐次接收並處理各玩家在拍賣彈窗中的出價
+int player_bid(GameState* gs, int player_idx, int sun_value) {
+    if (!gs->auction_active || player_idx != gs->current_bidder) return 0; 
+
+    // 有效出價紀錄
+    if (sun_value > 0 && sun_value > gs->highest_bid) {
+        gs->highest_bid = sun_value;
+        gs->highest_bidder = player_idx;
+    }
+
+    // 尋找下一個有籌碼的出價者
+    int next_bidder = gs->current_bidder;
+    int loop_count = 0;
+    do {
+        next_bidder = (next_bidder + 1) % gs->num_players;
+        loop_count++;
+    } while (!has_available_suns(&gs->players[next_bidder]) && loop_count < gs->num_players);
+
+    // 🎯 修正 1：改用完美的「剩餘表態人數計數」來判斷是否整圈出價結束
+    // 當前出價者已經是最後一個有籌碼的人，或者次位輪替回到了起點，代表出價圈結束！
+    if (next_bidder == (gs->auction_trigger_player + 1) % gs->num_players || loop_count >= gs->num_players) {
+        if (gs->highest_bidder != -1) {
+            resolve_auction_win(gs, gs->highest_bidder, gs->highest_bid);
+            return 1; // 有人得標
+        } else {
+            // 🎯 修正 2：全體 PASS 流標處理 (完美區分強制滿格流標與主動流標)
+            // 依據 Ra 桌遊官方規則：若因8格全滿強制拍賣且全員流標，拍賣區「必須全部清空移出遊戲」
+            if (gs->auction_count >= AUCTION_TRACK_SIZE) {
+                gs->auction_count = 0; 
+            }
+            gs->auction_active = 0;
+            next_player(gs);
+            return -1; // 全員流標
+        }
+    }
+
+    gs->current_bidder = next_bidder;
+    return 0; // 繼續等待下一位出價
+}
+
+// 舊版一次性打包出價之相容介面
+int run_auction(GameState* gs, int *bids, int bids_count) {
+    int highest_bid = 0, winner_idx = -1;
+    for (int i = 0; i < bids_count; i++) {
+        if (bids[i] > highest_bid) {
+            highest_bid = bids[i];
+            winner_idx = i;
+        }
+    }
+    if (winner_idx >= 0) {
+        resolve_auction_win(gs, winner_idx, highest_bid);
+    } else {
+        if (gs->auction_count >= AUCTION_TRACK_SIZE) gs->auction_count = 0;
+        gs->auction_active = 0;
+        next_player(gs);
+    }
+    return winner_idx;
+}
+
+
+// =================================================================
+// ⏳ 區塊三：時代推進判斷 (原 game_epoch.c 部分)
+// =================================================================
+
+int is_epoch_over(GameState* gs) {
+    int maxes[] = {0, 0, 6, 8, 9, 10};
+    return gs->sun_boat_position >= maxes[gs->num_players];
+}
+
+// 結束當前時代並進行清算
+void end_epoch(GameState* gs) {
+    // 預防性防禦：如果時代數值已經不正常，強制修正
+    if (gs->current_epoch < 1) gs->current_epoch = 1;
+    
+    printf("====== 第 %d 時代結束結算 ======\n", gs->current_epoch);
+    
+    score_epoch(gs); // 呼叫計分模組
+
+    // 重置時代變數
+    gs->auction_count     = 0;
+    gs->sun_boat_position = 0;
+    gs->auction_active    = 0;
+
+    // 時代更換，所有人的籌碼解除鎖定
+    for (int p = 0; p < gs->num_players; p++) {
+        for (int s = 0; s < 13; s++) {
+            gs->players[p].sun_used[s] = 0; 
+        }
+    }
+
+    // 🎯 修正：Ra 的時代是第 1 時代、第 2 時代、第 3 時代。
+    // 當第 3 時代結束時，遊戲正式終結。
+    if (gs->current_epoch >= 3) {
+        printf("====== 三個時代已全部結束，進入終局總計分 ======\n");
+        gs->game_over = 1;
+        score_final(gs); 
+    } else {
+        gs->current_epoch++;
+        printf("[C Core] 時代推進成功，目前進入第 %d 時代。\n", gs->current_epoch);
+    }
+}
+
+
+// =================================================================
+// 🌋 區塊四：拍賣池拾取與災難處理 (原 game_resolution.c 部分)
+// =================================================================
+
+// 結算得標並執行中央籌碼互換
+void resolve_auction_win(GameState* gs, int winner_idx, int win_bid) {
     Player* winner = &gs->players[winner_idx];
 
-    // 1. 發放拍賣區板塊，如果是災難立刻扣除
+    // 1. 發放拍賣區板塊與災難立即扣除
     for (int i = 0; i < gs->auction_count; i++) {
         Tile tile = gs->auction_track[i];
         if (tile.type == TILE_DISASTER) {
@@ -294,98 +402,24 @@ static void resolve_auction_win(GameState* gs, int winner_idx, int win_bid) {
         }
     }
 
-    // 2. 🎯 核心修復：找到玩家出價的那枚籌碼，與中央交換並「翻面鎖定」
+    // 2. 🎯 核心互換規則：尋找對應籌碼，與中央 center_sun 交換並標記 sun_used = 1
     for (int s = 0; s < 13; s++) {
         if (winner->suns[s] == win_bid && winner->sun_used[s] == 0) {
             int temp = winner->suns[s];
-            winner->suns[s] = gs->center_sun;
-            winner->sun_used[s] = 1; // 💡 標記為已使用，不再參與下一次競標！
-            gs->center_sun = temp;
-
-            printf("🔄 籌碼交換：玩家 %d 用數字 [%d] 標走，換回中央的舊籌碼 [%d] 並翻面朝下。\n", 
-                   winner_idx + 1, temp, winner->suns[s]);
+            winner->suns[s] = gs->center_sun; // 拿回中央公共太陽舊籌碼
+            winner->sun_used[s] = 1;          // 💡 翻面鎖定！當前時代不能再使用
+            gs->center_sun = temp;            // 得標出的籌碼變成新中央公共太陽
             break;
         }
     }
-    printf("🎉 競標勝者：玩家 %d，共得到 %d 張牌。\n", winner_idx + 1, gs->auction_count);
     
+    // 3. 得標者接續主回合動作
+    gs->current_player = winner_idx;
     gs->auction_count = 0;
     gs->auction_active = 0;
-}
 
-// 🎮 核心狀態機連動：供 Web / Python GUI 逐次呼叫的出價函式
-// sun_value: 玩家選擇出的籌碼數字，0 代表 Pass
-// 返回值：1 = 有人得標, -1 = 全員流標結束, 0 = 繼續等待下一位玩家出價
-int player_bid(GameState* gs, int player_idx, int sun_value) {
-    if (!gs->auction_active) return -1;
-    if (player_idx != gs->current_bidder) return 0; 
-
-    // 1. 處理出價邏輯
-    if (sun_value > 0) {
-        if (sun_value > gs->highest_bid) {
-            gs->highest_bid = sun_value;
-            gs->highest_bidder = player_idx;
-        }
+    // 防呆：如果剛好把最後一枚籌碼用完了，主回合移交給下一位有籌碼的人
+    if (!has_available_suns(&gs->players[gs->current_player])) {
+        next_player(gs);
     }
-
-    // 2. 尋找下一位有資格（有剩餘籌碼）出價的玩家
-    int next_bidder = gs->current_bidder;
-    int loop_count = 0;
-    do {
-        next_bidder = (next_bidder + 1) % gs->num_players;
-        loop_count++;
-    } while (!has_available_suns(&gs->players[next_bidder]) && loop_count < gs->num_players);
-
-    // 3. 🎯 判斷是否「整圈出價表態完畢」
-    // 當 player_idx 等於觸發者的同一人時，代表順時針一圈回到尾家做完了終極決定
-    if (player_idx == gs->auction_trigger_player) {
-        if (gs->highest_bidder != -1) {
-            // (A) 有人成功標到一池板塊
-            resolve_auction_win(gs, gs->highest_bidder, gs->highest_bid);
-            return 1;
-        } else {
-            // (B) 🎯 全員 PASS 流標：根據觸發原因執行分流
-            // 這裡利用 conduct_auction 暫存的滿格標記做判斷
-            if (gs->auction_count >= 8) {
-                // 規則：如果是 8 格滿觸發流標 -> 拍賣區「全數移除」
-                gs->auction_count = 0;
-                printf("📦 規則生效：8 格滿強制競標流標，圖板板塊全數清空棄牌！\n");
-            } else {
-                // 規則：如果是抽到 Ra 牌觸發流標 -> 板塊「均原地保留」
-                printf("☀️ 規則生效：Ra 板塊競標流標，圖板板塊原地留下。\n");
-            }
-            gs->auction_active = 0;
-            return -1;
-        }
-    }
-
-    // 回合尚未結束，指定下一位出價者
-    gs->current_bidder = next_bidder;
-    return 0; 
-}
-
-// 供一次性測試或舊版序列化維持相容的舊介面
-int run_auction(GameState *gs, int *bids, int bids_count) {
-    int highest_bid = 0;
-    int winner_idx = -1;
-
-    for (int i = 0; i < bids_count; i++) {
-        if (bids[i] > highest_bid) {
-            highest_bid = bids[i];
-            winner_idx = i;
-        }
-    }
-
-    if (winner_idx >= 0) {
-        resolve_auction_win(gs, winner_idx, highest_bid);
-    } else {
-        if (gs->auction_count >= 8) {
-            gs->auction_count = 0;
-            printf("📦 8格滿流標：全數移除\n");
-        } else {
-            printf("☀️ Ra流標：全數保留\n");
-        }
-        gs->auction_active = 0;
-    }
-    return winner_idx;
 }

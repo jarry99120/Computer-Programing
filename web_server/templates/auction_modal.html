@@ -1,97 +1,140 @@
-<div id="auction-modal"
-    class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div
-        class="bg-gray-800 border border-gray-700 max-w-md w-full rounded-2xl p-6 shadow-2xl animate-[scaleIn_0.2s_ease-out]">
+<div id="auction-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-gray-800 border border-gray-700 max-w-md w-full rounded-2xl p-6 shadow-2xl animate-[scaleIn_0.2s_ease-out]">
         <h3 class="text-2xl font-black text-center text-yellow-500 mb-1 tracking-wide">🔥 神聖競標場 🔥</h3>
-        <p id="modal-center-info" class="text-center text-gray-400 text-xs mb-4"></p>
-
-        <div id="modal-voting-status"
-            class="bg-gray-900/90 p-4 rounded-xl mb-6 space-y-2.5 text-sm border border-gray-700/50"></div>
-
+        <p id="auction-modal-pool-info" class="text-center text-gray-400 text-xs mb-4"></p>
+        <div id="modal-voting-status" class="bg-gray-900/90 p-4 rounded-xl mb-6 space-y-2.5 text-sm border border-gray-700/50">
+            <p class="text-gray-400 text-center text-xs">⚔️ 當前最高出價：<span class="text-yellow-400 font-bold" id="lbl-highest-bid">暫無 (皆為 Pass)</span></p>
+        </div>
         <div class="text-center">
-            <p id="modal-turn-prompt" class="font-bold text-base mb-4 text-gray-200">請玩家 - 選擇出價籌碼：</p>
-            <div id="modal-sun-buttons" class="flex flex-wrap justify-center gap-2 mb-5"></div>
-            <button onclick="castBid(0)"
-                class="w-full bg-red-600/90 hover:bg-red-500 text-white py-2.5 rounded-xl font-bold transition">
-                Pass (放棄此輪出價)
-            </button>
+            <p id="auction-modal-turn-title" class="font-bold text-base mb-4 text-gray-200">請玩家 - 選擇出價籌碼：</p>
+            <div id="auction-modal-suns-box" class="flex flex-wrap justify-center gap-2 mb-5"></div>
         </div>
     </div>
 </div>
 
 <script>
-    let localBids = [];
-    let currentVoter = 0;
-    let votesCast = 0;
+    let isBidSubmitting = false;
 
     function openAuctionModal() {
-        localBids = new Array(gameState.num_players).fill(0);
-        currentVoter = gameState.current_bidder;
-        votesCast = 0;
-        document.getElementById('modal-center-info').innerText = `本池共計 ${gameState.auction_count} 張板塊 | 中央公共太陽：[${gameState.center_sun}]`;
-        document.getElementById('auction-modal').classList.remove('hidden');
-        askNextVoter();
-    }
+        try {
+            if (typeof gameState === 'undefined' || !gameState) {
+                throw new Error("全域變數 'gameState' 未定義或為空，無法渲染競標畫面！");
+            }
+            if (!gameState.auction_active) {
+                console.log("[Auction UI] 偵測到競標未啟用，自動關閉彈窗。");
+                document.getElementById('auction-modal').classList.add('hidden');
+                return;
+            }
 
-    function askNextVoter() {
-        if (votesCast >= gameState.num_players) { submitFinalBids(); return; }
+            const poolCount = gameState.auction_count !== undefined ? gameState.auction_count : (gameState.auction_track ? gameState.auction_track.length : 0);
+            document.getElementById('auction-modal-pool-info').innerText = `本池共計 ${poolCount} 張板塊 ｜ 中央公共太陽：[☀️ ${gameState.center_sun || 0}]`;
 
-        // ... [前面原有的即時戰況看板代碼維持不變] ...
+            const lblHighest = document.getElementById('lbl-highest-bid');
+            if (gameState.highest_bid && gameState.highest_bid > 0) {
+                lblHighest.innerText = `☀️ ${gameState.highest_bid} (由 玩家 ${gameState.highest_bidder + 1} 保持)`;
+            } else {
+                lblHighest.innerText = "暫無 (皆為 Pass)";
+            }
 
-        let pData = gameState.players[currentVoter];
-        let btnContainer = document.getElementById('modal-sun-buttons');
-        btnContainer.innerHTML = '';
+            const bidderIdx = gameState.current_bidder;
+            if (bidderIdx === undefined || bidderIdx === null) {
+                throw new Error("gameState 中缺少 'current_bidder' 欄位，後端可能未正確推動狀態。");
+            }
 
-        // 🎯 修正：檢查是否「除了當前發起者外，前面所有人全部都 Pass 了」
-        let maxBidSoFar = Math.max(...localBids);
-        let isProhibitedPass = false;
+            const bidder = gameState.players ? gameState.players.find(p => p.player_id == bidderIdx) : null;
+            if (!bidder) {
+                throw new Error(`在 players 列表中找不到 player_id 為 ${bidderIdx} 的玩家資料！`);
+            }
+            
+            document.getElementById('auction-modal-turn-title').innerText = `請 【玩家 ${bidderIdx + 1}】 選擇出價籌碼：`;
 
-        // 如果是手動發起競標、且現在輪到發起者表態、且前面的出價全是 0
-        if (gameState.auction_count < 8 && currentVoter === gameState.current_player && maxBidSoFar === 0 && votesCast === gameState.num_players - 1) {
-            isProhibitedPass = true; // 觸發官方鐵則：發起者必須強制出價
+            const sunsContainer = document.getElementById('auction-modal-suns-box');
+            sunsContainer.innerHTML = ''; 
+
+            let isProhibitedPass = false;
+            if (gameState.auction_count < 8 && bidderIdx === gameState.current_player && (!gameState.highest_bid || gameState.highest_bid === 0)) {
+                isProhibitedPass = true;
+            }
+
+            if (bidder.active_suns && bidder.active_suns.length > 0) {
+                bidder.active_suns.forEach(sunVal => {
+                    const btn = document.createElement('button');
+                    if (gameState.highest_bid && sunVal <= gameState.highest_bid) {
+                        btn.className = "bg-gray-700 text-gray-500 font-bold px-4 py-3 rounded-xl border border-gray-600 shadow cursor-not-allowed text-base opacity-40";
+                        btn.disabled = true;
+                        btn.innerText = `☀️ ${sunVal} (過低)`;
+                    } else {
+                        btn.className = "bg-gradient-to-b from-yellow-400 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-gray-950 font-black px-4 py-3 rounded-xl border-2 border-amber-600 shadow transition active:scale-95 text-base";
+                        btn.innerText = `☀️ 籌碼 ${sunVal}`;
+                        btn.onclick = (e) => { e.preventDefault(); submitSingleBid(bidderIdx, sunVal); };
+                    }
+                    sunsContainer.appendChild(btn);
+                });
+            } else {
+                sunsContainer.innerHTML = `<div class="w-full text-center text-red-400 font-medium italic text-sm mb-2">⚠️ 你已無可用籌碼，本輪被迫執行 Pass。</div>`;
+            }
+
+            const passBtn = document.createElement('button');
+            if (isProhibitedPass) {
+                passBtn.className = "w-full bg-gray-700 text-gray-400 py-2.5 rounded-xl font-bold cursor-not-allowed border border-gray-600 opacity-50 mt-2";
+                passBtn.disabled = true;
+                passBtn.innerText = "❌ 規則限制：主動發起競拍者此輪不可 Pass！";
+            } else {
+                passBtn.className = "w-full bg-red-600 hover:bg-red-500 text-white py-2.5 rounded-xl font-bold transition shadow-md mt-2 active:scale-[0.98]";
+                passBtn.innerText = "✋ 選擇 Pass (不出價)";
+                passBtn.onclick = (e) => { e.preventDefault(); submitSingleBid(bidderIdx, 0); };
+            }
+            sunsContainer.appendChild(passBtn);
+
+            document.getElementById('auction-modal').classList.remove('hidden');
+        } catch (err) {
+            console.error("[🔥 UI 渲染致命錯誤]", err);
+            alert(`❌ 畫面渲染失敗:\n${err.message}`);
         }
+    }
 
-        pData.active_suns.forEach(sunVal => {
-            let btn = document.createElement('button');
-            btn.className = "bg-gradient-to-b from-yellow-400 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-gray-900 font-black px-4 py-2 rounded-xl text-sm transition shadow-md";
-            btn.innerText = `☀️ ${sunVal}`;
-            btn.onclick = () => castBid(sunVal);
-            btnContainer.appendChild(btn);
-        });
+    async function submitSingleBid(playerIdx, sunValue) {
+        if (isBidSubmitting) return;
+        isBidSubmitting = true; 
 
-        // 🎯 控制 Pass 按鈕的生死
-        let passBtn = document.querySelector("#auction-modal button[onclick='castBid(0)']");
-        if (isProhibitedPass) {
-            passBtn.disabled = true;
-            passBtn.className = "w-full bg-gray-600 text-gray-400 py-2.5 rounded-xl font-bold cursor-not-allowed";
-            passBtn.innerText = "❌ 規則限制：主動發起競拍者此輪不可 Pass！";
-        } else {
-            passBtn.disabled = false;
-            passBtn.className = "w-full bg-red-600/90 hover:bg-red-500 text-white py-2.5 rounded-xl font-bold transition";
-            passBtn.innerText = "Pass (放棄此輪出價)";
+        try {
+            let res = await fetch('/api/submit_bid', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ player_id: playerIdx, bid_value: sunValue })
+            });
+
+            let data = await res.json();
+
+            if (res.status !== 200 || data.status === "error") {
+                // 🎯 如果後端報錯，直接將後端的 Traceback 彈窗顯示出來！
+                let serverErr = data.message || "未知錯誤";
+                let trace = data.traceback ? `\n\n[後端堆疊軌跡]:\n${data.traceback}` : "";
+                throw new Error(`${serverErr}${trace}`);
+            }
+
+            if (data.game_state) gameState = data.game_state;
+            else if (data.game) gameState = data.game;
+            else throw new Error("後端回傳成功，但 JSON 中找不到任何遊戲狀態欄位 (game_state)！");
+
+            if (!gameState.auction_active || gameState.auction_active === 0) {
+                document.getElementById('auction-modal').classList.add('hidden');
+                let result = data.auction_result;
+                if (result && result.winner !== undefined && result.winner >= 0) {
+                    alert(`🎉 競標結算：【玩家 ${result.winner + 1}】使用 ☀️ ${result.winning_bid} 成功贏得此輪競標池！`);
+                } else {
+                    alert("💨 結算結果：全員選擇 Pass，此輪無人得標流標！板塊全數清空。");
+                }
+                if (typeof renderUI === "function") renderUI();
+            } else {
+                openAuctionModal();
+                if (typeof renderUI === "function") renderUI(); 
+            }
+        } catch (error) {
+            console.error("[🔥 出價通訊致命錯誤]", error);
+            alert(`❌ 出價處理失敗:\n${error.message}`);
+        } finally {
+            isBidSubmitting = false;
         }
-    }
-
-    function castBid(val) {
-        let maxBid = Math.max(...localBids);
-        if (val > 0 && val <= maxBid) { alert(`出價必須大於目前最高出價 (☀️ ${maxBid})！`); return; }
-        localBids[currentVoter] = val;
-        currentVoter = (currentVoter + 1) % gameState.num_players;
-        votesCast++;
-        askNextVoter();
-    }
-
-    async function submitFinalBids() {
-        let res = await fetch('/api/submit_bids', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bids: localBids })
-        });
-        let data = await res.json();
-        gameState = data.game;
-        document.getElementById('auction-modal').classList.add('hidden');
-        if (data.winner >= 0) alert(`🎉 恭喜【玩家 ${data.winner + 1}】贏得此輪競標池！`);
-        else alert("💨 全員 Pass，此輪流標，板塊全數清空！");
-        renderUI(); // 呼叫 board.html 裡面的主刷新函式
     }
 </script>

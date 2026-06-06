@@ -7,20 +7,31 @@
 #define AUCTION_TRACK_SIZE 8
 #define MAX_HAND          50
 
+// ==================== 列舉與結構體定義 ====================
+
 typedef enum {
-    TILE_RA=0, TILE_PHARAOH=1, TILE_DISASTER=2,
-    TILE_NILE=3, TILE_CIVILIZATION=4, TILE_PYRAMID=5,
-    TILE_GOD=6, TILE_GOLD=7, TILE_FLOOD=8
+    TILE_RA = 0, 
+    TILE_PHARAOH = 1, 
+    TILE_DISASTER = 2,
+    TILE_NILE = 3, 
+    TILE_CIVILIZATION = 4, 
+    TILE_PYRAMID = 5,
+    TILE_GOD = 6, 
+    TILE_GOLD = 7, 
+    TILE_FLOOD = 8
 } TileType;
 
-typedef struct { TileType type; int value; } Tile;
+typedef struct { 
+    TileType type; 
+    int value; 
+} Tile;
 
 typedef struct {
     int player_id;
     Tile hand[MAX_HAND];
     int hand_count;
     int suns[13];
-    int sun_used[13];   
+    int sun_used[13];   // 💡 0 = 正面可用, 1 = 翻面鎖定（次世代解鎖）
     int score;
 } Player;
 
@@ -36,24 +47,34 @@ typedef struct {
     int current_player;
     int game_over;
     
-    int auction_active;         
-    int center_sun;             
-    int highest_bid;            
-    int highest_bidder;         
-    int current_bidder;         
-    int auction_trigger_player; 
+    int auction_active;         // 競標狀態機是否啟動中
+    int center_sun;             // 桌面正中央的公共太陽籌碼數值
+    int highest_bid;            // 當前競標的最高出價
+    int highest_bidder;         // 當前最高出價者的玩家 Index
+    int current_bidder;         // 當前輪到出價的玩家 Index
+    int auction_trigger_player; // 發起競標（喊Ra或抽到Ra）的玩家 Index
 } GameState;
 
-// 函式宣告
+// ==================== 跨檔案函式宣告 (通訊橋樑) ====================
+
+// 1️⃣ 由 game_core.c 實作
 void init_game(GameState* gs, int num_players);
 void shuffle_deck(Tile* deck, int size);
 Tile draw_tile(GameState* gs);
 int  add_to_auction(GameState* gs, Tile tile);
-void conduct_auction(GameState* gs, int trigger_player, int is_forced);
-int  is_epoch_over(GameState* gs);
-void end_epoch(GameState* gs);
 void next_player(GameState* gs);
+int  has_available_suns(Player* p); // 💡 移除了 static，公開給狀態機檢查資格
+
+// 2️⃣ 由 game_auction.c 實作
+void conduct_auction(GameState* gs, int trigger_player, int is_forced);
 int  player_bid(GameState* gs, int player_idx, int sun_value);
 int  run_auction(GameState* gs, int bids[], int num_bids);
+
+// 3️⃣ 由 game_resolution.c 實作
+void resolve_auction_win(GameState* gs, int winner_idx, int win_bid); // 💡 移除了 static，公開給競標模組結算
+
+// 4️⃣ 由 game_epoch.c 實作
+int  is_epoch_over(GameState* gs);
+void end_epoch(GameState* gs);
 
 #endif // GAME_H
