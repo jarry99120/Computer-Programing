@@ -19,7 +19,6 @@
 
         /* 懸浮放大微互動 */
         transition: transform 0.2s ease, box-shadow 0.2s ease;
-        cursor: help;
     }
 
     .auction-tile:hover {
@@ -40,25 +39,18 @@
 
 <div class="max-w-7xl mx-auto px-4 py-8 animate-[fadeIn_0.4s_ease-out]">
 
-    <div
-        class="bg-gray-800 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center border border-gray-700 gap-4 mb-6 shadow-lg relative">
+    <div class="bg-gray-800 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center border border-gray-700 gap-4 mb-6 shadow-lg relative">
         <div class="flex flex-wrap gap-6 text-lg font-bold justify-center">
-            <span id="lbl-epoch"
-                class="text-yellow-400 bg-yellow-400/10 px-3 py-1 rounded-md border border-yellow-400/20">載入中...</span>
-            <span id="lbl-ra-track" class="text-red-400 bg-red-400/10 px-3 py-1 rounded-md border border-red-400/20">Ra
-                軌道: -</span>
-            <span id="lbl-center-sun"
-                class="text-teal-400 bg-teal-400/10 px-3 py-1 rounded-md border border-teal-400/20">☯️ 中央公共太陽:
-                [-]</span>
+            <span id="lbl-epoch" class="text-yellow-400 bg-yellow-400/10 px-3 py-1 rounded-md border border-yellow-400/20">載入中...</span>
+            <span id="lbl-ra-track" class="text-red-400 bg-red-400/10 px-3 py-1 rounded-md border border-red-400/20">Ra 軌道: -</span>
+            <span id="lbl-center-sun" class="text-teal-400 bg-teal-400/10 px-3 py-1 rounded-md border border-teal-400/20">☯️ 中央公共太陽: [-]</span>
         </div>
 
         <div class="flex items-center gap-4">
-            <div id="lbl-current-turn"
-                class="text-lg font-black bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 px-6 py-1.5 rounded-full shadow">
+            <div id="lbl-current-turn" class="text-lg font-black bg-gradient-to-r from-amber-500 to-yellow-500 text-gray-900 px-6 py-1.5 rounded-full shadow">
                 讀取中...
             </div>
-            <button onclick="returnToMainMenu()"
-                class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-1.5 rounded-xl text-sm shadow-md transition transform active:scale-95 flex items-center gap-1">
+            <button onclick="returnToMainMenu()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-1.5 rounded-xl text-sm shadow-md transition transform active:scale-95 flex items-center gap-1">
                 🚪 返回主選單
             </button>
         </div>
@@ -67,21 +59,16 @@
     <div class="bg-gray-800/80 backdrop-blur p-6 rounded-2xl border border-gray-700 mb-8 shadow-xl text-center">
         <h2 class="text-lg font-bold mb-4 text-gray-400 uppercase tracking-wider">拍賣區 (Auction Track)</h2>
 
-        <div id="auction-track-box" class="grid grid-cols-4 sm:grid-cols-8 gap-4 justify-center min-h-[110px] mb-6">
-        </div>
+        <div id="auction-track-box" class="grid grid-cols-4 sm:grid-cols-8 gap-4 justify-center min-h-[110px] mb-6"></div>
 
-        <div id="action-buttons-group" class="flex justify-center gap-4">
-            <button id="btn-draw" onclick="drawTile()"
-                class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95">🎲
-                抽牌</button>
-            <button id="btn-call-ra" onclick="callRa()"
-                class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95">☀️
-                召喚 RA (主動競標)</button>
+        <div id="action-buttons-group" class="flex flex-wrap justify-center gap-4">
+            <button id="btn-draw" onclick="drawTile()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95">🎲 抽牌</button>
+            <button id="btn-call-ra" onclick="callRa()" class="bg-orange-600 hover:bg-orange-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95">☀️ 召喚 RA (主動競標)</button>
+            <button id="btn-use-god" onclick="useGodTile()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95">🏛️ 使用神明板塊</button>
         </div>
     </div>
 
-    <h2 class="text-xl font-bold mb-4 text-gray-400 px-1">👥 玩家陣營面板 <span
-            class="text-xs font-normal text-gray-500 ml-2">(💡 提示：點擊玩家面板可檢視目前擁建立的詳細板塊資產)</span></h2>
+    <h2 class="text-xl font-bold mb-4 text-gray-400 px-1">👥 玩家陣營面板 <span class="text-xs font-normal text-gray-500 ml-2">(💡 提示：點擊玩家面板可檢視目前建立的詳細板塊資產)</span></h2>
     <div id="players-board" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-6"></div>
 </div>
 
@@ -92,6 +79,7 @@
 {% block scripts %}
 <script>
     let gameState = null;
+    let isGodExchangeMode = false; // 🎯 追蹤目前玩家是否點擊了神明板塊，處於等待選取交換卡牌的模式
 
     // 網頁開啟時，主動跟後端同步最新遊戲狀態
     window.addEventListener('DOMContentLoaded', fetchCurrentState);
@@ -107,12 +95,11 @@
     }
 
     // =================================================================
-    // 🗺️ 💡 動態圖片對照路由解析函式 (已整合最新災難與文明規則)
+    // 🗺️ 動態圖片對照路由解析函式 (已整合最新災難與文明規則)
     // =================================================================
     function getTileImageUrl(type, value) {
         const basePath = '/static/images/tiles/';
         
-        // 🎯 防呆：確保把後端傳來的數值轉成乾淨的數字，如果拿不到就預設為 1
         const safeValue = parseInt(value, 10) || 1;
         const safeType = parseInt(type, 10);
 
@@ -151,6 +138,9 @@
         }
     }
 
+    // =================================================================
+    // 🎨 UI 核心渲染渲染器
+    // =================================================================
     function renderUI() {
         if (!gameState) return;
 
@@ -159,12 +149,16 @@
         document.getElementById('lbl-ra-track').innerText = `Ra 軌道: ${gameState.sun_boat_position}/9`;
         document.getElementById('lbl-center-sun').innerText = `☯️ 中央公共太陽: [${gameState.center_sun}]`;
 
-        // 2. 判斷遊戲是否終局結束
+        // 2. 判斷遊戲狀態提示
         let turnLbl = document.getElementById('lbl-current-turn');
         if (gameState.game_over) {
             turnLbl.innerText = `🏁 遊戲結束！`;
             turnLbl.className = "text-lg font-black bg-red-600 text-white px-6 py-1.5 rounded-full shadow animate-pulse";
             document.getElementById('action-buttons-group').innerHTML = `<button onclick="window.location.href='/'" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-3 rounded-xl text-lg transition">返回大廳</button>`;
+        } else if (isGodExchangeMode) {
+            // 🎯 新增：神明交換模式狀態提示
+            turnLbl.innerText = `🏛️ 請選擇拍賣區的一張板塊進行交換...`;
+            turnLbl.className = "text-lg font-black bg-purple-600 text-white px-6 py-1.5 rounded-full shadow animate-pulse";
         } else if (gameState.auction_active) {
             turnLbl.innerText = `☀️ 競標進行中...`;
             turnLbl.className = "text-lg font-black bg-purple-600 text-white px-6 py-1.5 rounded-full shadow animate-pulse";
@@ -180,12 +174,16 @@
         for (let i = 0; i < 8; i++) {
             if (i < gameState.auction_track.length) {
                 let tile = gameState.auction_track[i];
-
-                // 建立方形實體板塊 <div>
                 let cell = document.createElement('div');
-                cell.className = "auction-tile border border-gray-700/60";
 
-                // 🎯 欄位安全防禦：相容後端不同的 JSON 命名結構
+                // 🎯 如果目前正處於「神明交換模式」，將卡牌加上紫色高亮閃爍外框、調整指針手勢
+                if (isGodExchangeMode) {
+                    cell.className = "auction-tile border-2 border-purple-400 animate-pulse cursor-pointer ring-4 ring-purple-500/30";
+                    cell.setAttribute('onclick', `executeGodExchange(${i}, '${tile.name}')`);
+                } else {
+                    cell.className = "auction-tile border border-gray-700/60 cursor-help";
+                }
+
                 const currentType = (tile.type_id !== undefined) ? tile.type_id : tile.type;
                 const currentValue = (tile.value_id !== undefined) ? tile.value_id : tile.value;
 
@@ -260,16 +258,46 @@
             pBoard.appendChild(card);
         });
 
-        // 5. 核心控鈕優化
+        // 5. 核心按鈕狀態控管優化（同步納入神明按鈕與交換模式判定）
         const drawBtn = document.getElementById('btn-draw');
         const raBtn = document.getElementById('btn-call-ra');
+        const godBtn = document.getElementById('btn-use-god');
 
-        if (gameState.auction_active) {
-            if (drawBtn) drawBtn.className = "bg-gray-700 text-gray-500 font-bold px-8 py-3 rounded-xl text-lg shadow cursor-not-allowed opacity-40";
-            if (raBtn) raBtn.className = "bg-gray-700 text-gray-500 font-bold px-8 py-3 rounded-xl text-lg shadow cursor-not-allowed opacity-40";
+        if (gameState.auction_active || isGodExchangeMode) {
+            const disabledClass = "bg-gray-700 text-gray-500 font-bold px-8 py-3 rounded-xl text-lg shadow cursor-not-allowed opacity-40";
+            if (drawBtn) drawBtn.className = disabledClass;
+            if (raBtn) raBtn.className = disabledClass;
+            
+            if (godBtn) {
+                if (isGodExchangeMode) {
+                    // 處於交換狀態中時，允許點擊原按鈕來取消交換
+                    godBtn.className = "bg-rose-600 hover:bg-rose-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95";
+                    godBtn.innerText = "❌ 取消神明交換";
+                    godBtn.disabled = false;
+                } else {
+                    godBtn.className = disabledClass;
+                    godBtn.disabled = true;
+                }
+            }
         } else {
             if (drawBtn) drawBtn.className = "bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95";
             if (raBtn) raBtn.className = "bg-orange-600 hover:bg-orange-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95";
+            
+            // 💡 防禦判定：如果當前玩家手牌中沒有神明板塊（Type ID: 6），或者拍賣軌是空的，就停用按鈕
+            const curPlayerStruct = gameState.players[gameState.current_player];
+            const hasGodTile = curPlayerStruct && curPlayerStruct.hand_tiles && curPlayerStruct.hand_tiles.some(t => t.type === 6);
+            const hasAuctionItems = gameState.auction_track && gameState.auction_track.length > 0;
+
+            if (godBtn) {
+                godBtn.innerText = "🏛️ 使用神明板塊";
+                if (hasGodTile && hasAuctionItems) {
+                    godBtn.className = "bg-purple-600 hover:bg-purple-500 text-white font-bold px-8 py-3 rounded-xl text-lg shadow-lg transition active:scale-95";
+                    godBtn.disabled = false;
+                } else {
+                    godBtn.className = "bg-gray-700 text-gray-500 font-bold px-8 py-3 rounded-xl text-lg shadow cursor-not-allowed opacity-40";
+                    godBtn.disabled = true;
+                }
+            }
         }
 
         // 6. 雙重檢查機制
@@ -284,6 +312,9 @@
         }
     }
 
+    // =================================================================
+    // 🎲 玩家行動 API 異步串接
+    // =================================================================
     async function drawTile() {
         if (gameState && gameState.auction_active) {
             alert("☀️ 目前正處於太陽神競標程序中！請先完成出價，不可抽牌。");
@@ -296,22 +327,17 @@
         gameState = data.game_state;
         renderUI();
 
-        // 🎯 【重大修復點】：嚴格排他性分流判定，終結雙重彈窗 Bug
         if (gameState && gameState.auction_active) {
-            // 優先權 1：不管怎樣，只要拍賣軌實體格子 >= 8，那就是 8 格滿觸發
             if (gameState.auction_count >= 8) {
                 alert("🚨 警告：拍賣軌道 8 格已滿！天神發怒，立刻強制進入大會競標程序！");
             } 
-            // 優先權 2：如果沒滿 8 格，但是剛剛抽出來的卡片是 Ra (Type ID 為 0)
             else if (data.drawn_tile && data.drawn_tile.type === 0) {
                 alert("☀️ 抽到太陽神 Ra 板塊！全體玩家請進入競標對話框出價！");
             } 
-            // 優先權 3：安全網防禦備用
             else if (gameState.forced_auction) {
                 alert("🏛️ 太陽神事件觸發強制競標！");
             }
 
-            // 確定開啟競標視窗
             if (typeof openAuctionModal === "function") {
                 openAuctionModal();
             }
@@ -333,6 +359,53 @@
 
         if (gameState.auction_active && typeof openAuctionModal === "function") {
             openAuctionModal();
+        }
+    }
+
+    // 🎯 點擊主按鈕：切換是否進入「選擇目標板塊模式」
+    function useGodTile() {
+        if (!gameState) return;
+        if (gameState.auction_active) {
+            alert("☀️ 競標進行中，無法執行神明板塊特殊行動！");
+            return;
+        }
+
+        // 翻轉狀態，重新刷新畫面（此時卡牌會開始閃亮）
+        isGodExchangeMode = !isGodExchangeMode;
+        renderUI();
+    }
+
+    // 🎯 真正選取了某個特定板塊後，向後端發送一換一交易
+    async function executeGodExchange(trackIndex, tileName) {
+        const confirmUse = confirm(`🏛️ 確定要消耗一張「神明板塊」，來單獨換取拍賣區中的【${tileName}】嗎？\n(此行動經確認會立刻執行並結束你的回合)`);
+        if (!confirmUse) return;
+
+        try {
+            let res = await fetch('/api/use_god_tile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    player_id: gameState.current_player,
+                    track_index: parseInt(trackIndex, 10) // 💡 傳遞玩家挑選的格子索引 (0 ~ 7)
+                })
+            });
+
+            let data = await res.json();
+            if (res.ok && data.success) {
+                alert(`🏛️ 神蹟顯靈！成功換取【${tileName}】！`);
+                isGodExchangeMode = false; // 交易成功，關閉交換模式
+                gameState = data.game_state;
+                renderUI();
+            } else {
+                alert("❌ 行動失敗：" + (data.error || "不符合使用條件"));
+                isGodExchangeMode = false;
+                renderUI();
+            }
+        } catch (error) {
+            console.error("Error using god tile:", error);
+            alert("伺服器通訊錯誤，無法執行神明行動。");
+            isGodExchangeMode = false;
+            renderUI();
         }
     }
 

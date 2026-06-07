@@ -68,6 +68,12 @@ engine.run_auction.restype      = ctypes.c_int
 engine.player_bid.argtypes      = [ctypes.POINTER(GameState), ctypes.c_int, ctypes.c_int]
 engine.player_bid.restype       = ctypes.c_int # 1:有人得標, -1:流標, 0:下一位
 
+# 🎯 全新擴充：神明板塊特殊行動 (God Action) 的型別防禦
+# C 原型：int player_use_god_tile(GameState* gs, int player_idx, int track_index);
+# ✨ 已修正：引數型別追加第三個參數 (ctypes.c_int)，對齊「精準一換一」後端規格
+engine.player_use_god_tile.argtypes = [ctypes.POINTER(GameState), ctypes.c_int, ctypes.c_int]
+engine.player_use_god_tile.restype  = ctypes.c_int # 1:執行成功, 0:執行失敗
+
 # ==================== 4. 初始化全域狀態機指標 ====================
 
 gs = GameState()

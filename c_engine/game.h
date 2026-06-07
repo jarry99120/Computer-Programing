@@ -57,24 +57,29 @@ typedef struct {
 
 // ==================== 跨檔案函式宣告 (通訊橋樑) ====================
 
-// 1️⃣ 由 game_core.c 實作
+// 1️⃣ 核心基礎與輔助功能
 void init_game(GameState* gs, int num_players);
 void shuffle_deck(Tile* deck, int size);
 Tile draw_tile(GameState* gs);
 int  add_to_auction(GameState* gs, Tile tile);
 void next_player(GameState* gs);
-int  has_available_suns(Player* p); // 💡 移除了 static，公開給狀態機檢查資格
+int  has_available_suns(Player* p); // 💡 公開給狀態機檢查資格
 
-// 2️⃣ 由 game_auction.c 實作
+// 2️⃣ 德式競標狀態機核心
 void conduct_auction(GameState* gs, int trigger_player, int is_forced);
 int  player_bid(GameState* gs, int player_idx, int sun_value);
 int  run_auction(GameState* gs, int bids[], int num_bids);
 
-// 3️⃣ 由 game_resolution.c 實作
-void resolve_auction_win(GameState* gs, int winner_idx, int win_bid); // 💡 移除了 static，公開給競標模組結算
+// 3️⃣ 拍賣池拾取與災難處理
+void resolve_auction_win(GameState* gs, int winner_idx, int win_bid); // 💡 公開給競標模組結算
 
-// 4️⃣ 由 game_epoch.c 實作
+// 4️⃣ 時代推進判斷
 int  is_epoch_over(GameState* gs);
 void end_epoch(GameState* gs);
+
+// 🎯 5️⃣ 全新擴充：神明板塊特殊行動 (God Action)
+// 💡 供後端 API 控制器呼叫，執行成功回傳 1，失敗回傳 0
+// ✨ 已修正：傳入 track_index 以實作「精準一換一」規則對齊
+int  player_use_god_tile(GameState* gs, int player_idx, int track_index);
 
 #endif // GAME_H

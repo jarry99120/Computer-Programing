@@ -45,7 +45,7 @@ static int ra_track_max(int num_players) {
 // 遊戲初始化
 void init_game(GameState* gs, int num_players) {
     memset(gs, 0, sizeof(GameState));
-
+    srand((unsigned int)time(NULL));
     if (num_players < 2 || num_players > 5) {
         num_players = 3; 
     }
@@ -80,7 +80,7 @@ void init_game(GameState* gs, int num_players) {
     // C. 河流板塊 : 總計 37個
     for (int i = 0; i < 25; i++) {
         gs->deck[deck_idx].type = TILE_NILE; 
-        gs->deck[deck_idx].value = 1;
+            gs->deck[deck_idx].value = 1;
         deck_idx++;
     }
     for (int i = 0; i < 12; i++) {
@@ -289,12 +289,12 @@ int player_bid(GameState* gs, int player_idx, int sun_value) {
     do {
         next_bidder = (next_bidder + 1) % gs->num_players;
         search_count++;
-    } while (!has_available_suns(&gs->players[next_bidder]) && search_count < gs->num_players);
+    } while (!has_available_suns(&gs->players[next_bidder]) && search_count <= gs->num_players);
 
     // 計算出價起點並進行無籌碼跳過校正
     int first_bidder = (gs->auction_active == 3) ? gs->auction_trigger_player : (gs->auction_trigger_player + 1) % gs->num_players;
     int fix_loop = 0;
-    while (!has_available_suns(&gs->players[first_bidder]) && fix_loop < gs->num_players) {
+    while (!has_available_suns(&gs->players[first_bidder]) && fix_loop <= gs->num_players) {
         first_bidder = (first_bidder + 1) % gs->num_players;
         fix_loop++;
     }
@@ -337,7 +337,7 @@ int run_auction(GameState* gs, int *bids, int bids_count) {
     if (winner_idx >= 0) {
         resolve_auction_win(gs, winner_idx, highest_bid);
     } else {
-        gs->auction_count = 0; // 這裡也做同步防禦清空
+        gs->auction_count = 0; // 同步防禦清空
         gs->auction_active = 0;
         next_player(gs);
     }
@@ -418,4 +418,87 @@ void resolve_auction_win(GameState* gs, int winner_idx, int win_bid) {
     if (!has_available_suns(&gs->players[gs->current_player])) {
         next_player(gs);
     }
+}
+
+// =================================================================
+// 👑 新增區塊五：神明板塊特殊行動（精準一換一對齊版）
+// =================================================================
+
+/**
+ * 玩家執行「使用神明板塊」進行一對一精準換卡行動
+ * @param track_index 玩家指定的拍賣軌格子索引 (0 ~ gs->auction_count-1)
+ * 返回值: 1 : 執行成功 | 0 : 執行失敗
+ */
+int player_use_god_tile(GameState* gs, int player_idx, int track_index) {
+    // 防禦 A：基本狀態與競標程序校驗
+    if (gs->game_over || gs->auction_active) {
+        printf("[C Core] 錯誤：目前遊戲狀態不允許執行神明行動。\n");
+        return 0;
+    }
+
+    // 防禦 B：回合校驗
+    if (player_idx != gs->current_player) {
+        printf("[C Core] 錯誤：非玩家 %d 的回合，無法執行行動。\n", player_idx + 1);
+        return 0;
+    }
+
+    // 防禦 C：指定索引範圍校驗
+    if (track_index < 0 || track_index >= gs->auction_count) {
+        printf("[C Core] 錯誤：無效的拍賣軌索引 %d。\n", track_index);
+        return 0;
+    }
+
+    Player* p = &gs->players[player_idx];
+
+    // 防禦 D：檢查玩家手牌中是否真的持有神明板塊 (TILE_GOD)
+    int god_tile_idx = -1;
+    for (int i = 0; i < p->hand_count; i++) {
+        if (p->hand[i].type == TILE_GOD) {
+            god_tile_idx = i;
+            break;
+        }
+    }
+
+    if (god_tile_idx == -1) {
+        printf("[C Core] 錯誤：玩家 %d 手中沒有神明板塊，拒絕行動。\n", player_idx + 1);
+        return 0;
+    }
+
+    // 🎯 核心邏輯 1：取得目標板塊
+    Tile target_tile = gs->auction_track[track_index];
+    printf("[C Core] 玩家 %d 使用神明挑選了板塊: %d (Value: %d)\n", player_idx + 1, target_tile.type, target_tile.value);
+
+    // 🎯 核心邏輯 2：扣除並「永久捨棄」玩家手牌中的該張神明板塊
+    for (int i = god_tile_idx; i < p->hand_count - 1; i++) {
+        p->hand[i] = p->hand[i + 1];
+    }
+    p->hand_count--;
+
+    // 🎯 核心邏輯 3：將目標板塊移入玩家手牌 (若是災難則立刻結算)
+    if (target_tile.type == TILE_DISASTER) {
+        resolve_disaster_immediate(p, target_tile.value);
+    } else {
+        if (p->hand_count < 50) {
+            p->hand[p->hand_count++] = target_tile;
+        } else {
+            printf("[C Warning] 玩家 %d 手牌已滿，換回的板塊遭強制遺棄！\n", player_idx + 1);
+        }
+    }
+
+    // 🎯 核心邏輯 4：維護拍賣軌連續性，移出被拿走的卡片，後方卡片依序往前遞補
+    for (int i = track_index; i < gs->auction_count - 1; i++) {
+        gs->auction_track[i] = gs->auction_track[i + 1];
+    }
+    gs->auction_count--;
+
+    // 將移出後的最後一格清空防呆
+    gs->auction_track[gs->auction_count].type = -1;
+    gs->auction_track[gs->auction_count].value = 0;
+
+    printf("[C Core] 神明交換成功，拍賣軌目前剩餘數量: %d。\n", gs->auction_count);
+
+    // 🎯 核心邏輯 5：行動結束，將回合移交給下一位有效玩家
+    next_player(gs);
+
+    return 1;
 }
