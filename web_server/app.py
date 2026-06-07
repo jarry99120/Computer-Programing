@@ -44,16 +44,48 @@ def get_tile_name(tile_type, tile_value):
         return f"{base_name} (型號 {tile_value})"
         
     if tile_type == 2:    # 災難板塊 (game.h 中災難是 2)
-        dis_names = {1: "戰亂 ⚔️", 2: "乾旱 ☀️", 3: "地震 🌋", 4: "瘟疫 💀"}
+        dis_names = {1: "戰亂 ", 2: "乾旱 ", 3: "地震 ", 4: "瘟疫 "}
         return f"🔥 {base_name} ({dis_names.get(tile_value, '未知型')})"
     
     return base_name
 
+def get_display_name(tile_type, tile_value):
+    """
+    更新後的中文顯示名稱邏輯：
+    1. 災難類型：戰亂、乾旱、地震、法老駕崩
+    2. 建築類型：顯示為 建築 1 ~ 建築 8
+    """
+    ui_map = {
+        0: "太陽神 Ra", 1: "法老", 2: "災難", 3: "尼羅河", 
+        4: "文明", 5: "建築", 6: "神明", 7: "金幣", 8: "洪水"
+    }
+    base = ui_map.get(tile_type, "未知")
+    
+    # 針對災難 (Type 2) 的特殊命名
+    if tile_type == 2:
+        dis = {
+            1: "戰亂 ", 
+            2: "乾旱 ", 
+            3: "地震 ", 
+            4: "法老駕崩 "
+        }
+        return f"{dis.get(tile_value, '未知')} ({base})"
+    
+    # 針對建築/金字塔 (Type 5) 的特殊命名
+    if tile_type == 5:
+        # 確保顯示為 建築 1, 建築 2 ... 建築 8
+        return f"建築 {tile_value}"
+
+    # 針對文明 (Type 4) 的命名 (維持你原有的分類邏輯)
+    if tile_type == 4:
+        civ = {1: "火", 2: "農業", 3: "文字", 4: "天文", 5: "藝術"}
+        return f"{civ.get(tile_value, '通用')} ({base})"
+        
+    return base
 
 def get_game_state_json(gs):
     """
     將 C 核心的 GameState 結構體完整序列化為 Python 字典（JSON）。
-    加上全面的 try-except 終端機除錯機制，防止無聲卡死。
     """
     print("[Backend Packer] 正在將 C 結構體序列化為 JSON 字典...")
     try:
@@ -68,7 +100,7 @@ def get_game_state_json(gs):
             used_suns = []
             for s_idx in range(13):
                 sun_val = p.suns[s_idx]
-                if sun_val > 0:  # 過濾 C 語言陣列的 0 號填充值
+                if sun_val > 0: 
                     if p.sun_used[s_idx] == 0:
                         active_suns.append(sun_val)
                     else:
@@ -77,22 +109,20 @@ def get_game_state_json(gs):
             active_suns.sort()
             used_suns.sort()
 
-            # 2. 板塊穿透 (安全防禦：最高不超過 MAX_HAND=50)
+            # 2. 板塊穿透
             detailed_hand = []
             safe_hand_count = min(max(0, p.hand_count), 50)
             for h_idx in range(safe_hand_count):
                 tile = p.hand[h_idx]
-                # 只要不是未填入的空槽 (-1) 或是未初始化的 0 值垃圾資料就打包
                 if tile.type != -1 and tile.type >= 0:
                     detailed_hand.append({
-                        "type_id": tile.type,  # 🎯 統一前端變數命名格式
+                        "type_id": tile.type,
                         "type": tile.type,
-                        "value_id": tile.value, # 🎯 發放手牌也要帶有子數值型號
+                        "value_id": tile.value,
                         "value": tile.value,
                         "name": get_tile_name(tile.type, tile.value)
                     })
 
-            # 組裝單一玩家的 JSON 資料物件
             players_data.append({
                 "player_id": int(p.player_id), 
                 "score": int(p.score),
@@ -102,25 +132,22 @@ def get_game_state_json(gs):
                 "used_suns": used_suns
             })
 
-        # 3. 組裝全域遊戲狀態機回傳 (加上上限安全防呆)
+        # 3. 組裝全域遊戲狀態機回傳
         safe_auction_count = min(max(0, gs.auction_count), 8)
         auction_track = []
         for m in range(safe_auction_count):
             t = gs.auction_track[m]
-            # 🎯 補上 value 和 value_id，儲存格資料防禦
+            # 🎯【關鍵修復】：這裡補上 display_name
             auction_track.append({
                 "type_id": t.type, 
                 "type": t.type,
                 "value_id": t.value,
                 "value": t.value,
-                "name": get_tile_name(t.type, t.value)
+                "name": get_tile_name(t.type, t.value),
+                "display_name": get_display_name(t.type, t.value) 
             })
 
-        # 🎯【關鍵修復一】：不要轉成 bool！直接保留 C 底層的狀態碼整數給前端（0, 1, 2, 3）
         raw_auction_active = int(gs.auction_active)
-
-        # 🎯【關鍵修復二】：利用 C 核心新狀態，極簡且精準地指派強制競標旗標 (給相容舊版前端使用)
-        # 2 (抽到Ra) 或 3 (8格滿) 皆屬於強制競標
         forced_auction_flag = True if raw_auction_active in [2, 3] else False
                 
         packed_dict = {
@@ -132,22 +159,20 @@ def get_game_state_json(gs):
             "center_sun": int(gs.center_sun),
             "auction_count": int(gs.auction_count), 
             "auction_track": auction_track,
-            "auction_active": raw_auction_active,  # 🚀 現在傳回的是 0, 1, 2, 3 整數
+            "auction_active": raw_auction_active,
             "highest_bid": int(gs.highest_bid),
             "highest_bidder": int(gs.highest_bidder),
             "current_bidder": int(gs.current_bidder),
             "game_over": bool(gs.game_over),
             "players": players_data,
-            "forced_auction": forced_auction_flag   # 🚀 根據 C 核心狀態完美對齊的相容旗標
+            "forced_auction": forced_auction_flag
         }
         
-        # 💡 新增追蹤欄位防止前端在老代碼中找不到發起人
         if hasattr(gs, 'auction_trigger_player'):
             packed_dict["auction_trigger_player"] = int(gs.auction_trigger_player)
         else:
             packed_dict["auction_trigger_player"] = int(gs.current_player)
 
-        print(f"[Backend Packer Success] 打包完成。當前輪位資訊 -> 玩家: {packed_dict['current_player']}, 狀態碼: {packed_dict['auction_active']}, 強制競標: {packed_dict['forced_auction']}")
         return packed_dict
 
     except Exception as e:

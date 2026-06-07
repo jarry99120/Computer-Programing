@@ -129,7 +129,7 @@ void init_game(GameState* gs, int num_players) {
 
     int starter_suns[6][5][13] = {
         { {0} }, { {0} }, 
-        { {9, 11, 13, 15}, {8, 10, 12, 14} },
+        { {9, 11, 12, 14}, {8, 10, 13, 15} },
         { {2, 5, 8, 11},   {3, 6, 9, 12},   {4, 7, 10, 13} },
         { {4, 7, 12},      {5, 6, 11},      {2, 9, 10},      {3, 8, 13} },
         { {2, 11},         {3, 10},         {4, 9},          {5, 8},          {6, 7} }
@@ -140,7 +140,7 @@ void init_game(GameState* gs, int num_players) {
     for (int p = 0; p < gs->num_players; p++) {
         gs->players[p].player_id = p; 
         gs->players[p].hand_count = 0;
-        gs->players[p].score = 10;    
+        gs->players[p].score =5;    
 
         for (int h = 0; h < 50; h++) {
             gs->players[p].hand[h].type = -1;
