@@ -3,27 +3,153 @@
 {% block title %}首頁 — 太陽神 Ra{% endblock %}
 
 {% block content %}
-<div class="flex flex-col items-center justify-center pt-32 animate-[fadeIn_0.4s_ease-out]">
-    <h1 class="text-6xl font-extrabold text-yellow-500 mb-4 tracking-widest drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)]">太陽神
-        RA</h1>
-    <p class="text-xl text-gray-400 mb-12 tracking-wide">經典桌遊 C 語言核心 × Flask 模組化網頁</p>
+<style>
+    /* 基礎重設 */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
 
-    <div class="bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700 text-center max-w-sm w-full">
-        <h3 class="text-2xl mb-6 font-bold text-gray-200">建立新局</h3>
-        <p class="text-sm text-gray-400 mb-6">請選擇本局的遊戲玩家人數：</p>
-        <div class="grid grid-cols-2 gap-4">
-            <button onclick="startGame(2)"
-                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">2
-                人遊戲</button>
-            <button onclick="startGame(3)"
-                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">3
-                人遊戲</button>
-            <button onclick="startGame(4)"
-                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">4
-                人遊戲</button>
-            <button onclick="startGame(5)"
-                class="bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-gray-900 font-black py-3 rounded-xl text-lg transition shadow-md hover:scale-105">5
-                人遊戲</button>
+    .lobby-body-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh; 
+        overflow: hidden;
+    }
+
+    /* 遊戲主視窗外框 */
+    .game-wrapper {
+        background-color: #3d2a1d;
+        padding: 12px;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+    }
+
+    /* 🎮 核心大畫布看板 */
+    .game-container {
+        width: 1550px;
+        height: 725px;
+        
+        /* 讀取背景圖 */
+        background-image: url("{{ url_for('static', filename='images/main_bg.jpg') }}");
+        background-size: 101% 104%;
+        background-position: center;
+        background-repeat: no-repeat;
+
+        border-radius: 12px;
+        position: relative; /* 🎯 關鍵：讓內部的 absolute 元件以此看板為基準定位 */
+    }
+
+    /* 📌 人數按鈕整體區塊位置調整 */
+    .player-options {
+        display: flex;
+        gap: 40px;          /* 按鈕之間的左右間隔 */
+        position: absolute; /* 🎯 開啟絕對定位 */
+        
+        /* 💡 自由調整整排人數按鈕的上下左右位置 */
+        top: 300px;         /* 距離大畫布頂部 */
+        left: 50%;          /* 水平置中基準線 */
+        transform: translateX(-50%); /* 完美水平置中修正 */
+    }
+
+    /* 玩家人數按鈕基礎樣式 (扁平寬大版) */
+    .btn-player {
+        width: 290px;       
+        height: 65px;       
+        background: linear-gradient(to bottom, #ebdcb9, #d0be96);
+        border: 3px solid #bba476;
+        border-radius: 8px;
+        font-size: 28px;    
+        font-weight: bold;
+        color: #2a2a2a;
+        cursor: pointer;
+        box-shadow: 0 6px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5);
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .btn-player::after {
+        content: '';
+        position: absolute;
+        top: 4px; left: 4px; right: 4px; bottom: 4px;
+        border: 1px solid rgba(187, 164, 118, 0.4);
+        border-radius: 5px;
+        pointer-events: none;
+    }
+
+    .btn-player:hover:not(:disabled) {
+        background: linear-gradient(to bottom, #f5e8c8, #decba3);
+        transform: translateY(-3px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+    }
+
+    .btn-player:active:not(:disabled) {
+        transform: translateY(1px);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    }
+
+    .btn-player:disabled {
+        cursor: not-allowed;     /* 滑鼠移上去會顯示禁止符號，防止重複點擊 */
+        pointer-events: none;    /* 徹底鎖定點擊事件，不觸發任何 hover 或 active 的位移 */
+        
+        /* 💡 移除原本的變灰色設定，讓按鈕在 disabled 狀態下依然維持沙岩質感與原本的寬高 */
+        opacity: 1 !important;   
+        transform: none !important; 
+    }
+
+    /* 📌 退出遊戲按鈕位置調整 */
+    .btn-exit {
+        width: 290px;       
+        height: 65px;       
+        background: linear-gradient(to bottom, #e09260, #c37341);
+        border: 3px solid #a45a2d;
+        border-radius: 6px;
+        font-size: 24px;    
+        font-weight: bold;
+        color: #1a1a1a;
+        cursor: pointer;
+        box-shadow: 0 6px 10px rgba(0,0,0,0.3);
+        
+        /* 核心過渡動畫 */
+        transition: all 0.2s ease;
+
+        position: absolute; 
+        top: 418px;         
+        left: 50%;          
+        transform: translateX(-50%); /* 初始置中狀態 */
+    }
+
+    /* 🎯 修正後的 Hover 動畫：完美同步上方人數按鈕的往上浮動與陰影加深 */
+    .btn-exit:hover {
+        background: linear-gradient(to bottom, #eba373, #cf7f4d);
+        /* 核心：同時維持水平置中，並向上浮動 3px */
+        transform: translateY(-3px) translateX(-50%);
+        /* 核心：陰影同步加深加大 */
+        box-shadow: 0 8px 15px rgba(0,0,0,0.4);
+    }
+
+    /* 🎯 點擊按鈕下去那一瞬間的壓低效果 */
+    .btn-exit:active {
+        transform: translateY(1px) translateX(-50%);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    }
+</style>
+
+<div class="lobby-body-wrapper">
+    <div class="game-wrapper">
+        <div class="game-container" role="application" aria-label="太陽神拉線上桌遊大廳">
+            <div class="player-options">
+                <button type="button" class="btn-player" onclick="startGame(2)">2人</button>
+                <button type="button" class="btn-player" onclick="startGame(3)">3人</button>
+                <button type="button" class="btn-player" onclick="startGame(4)">4人</button>
+                <button type="button" class="btn-player" onclick="startGame(5)">5人</button>
+            </div>
+
+            <button type="button" id="btn-exit" class="btn-exit">退出遊戲</button>
+            
         </div>
     </div>
 </div>
@@ -32,15 +158,57 @@
 {% block scripts %}
 <script>
     async function startGame(num) {
-        let res = await fetch('/api/init', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ num_players: num })
-        });
-        if (res.ok) {
-            // 💡 重點：開局成功後，直接跳轉到專屬的遊戲圖板頁面！
-            window.location.href = '/board';
+        const buttons = document.querySelectorAll('.btn-player');
+        buttons.forEach(b => b.disabled = true);
+
+        console.log(`[Lobby] 正在與後端神殿同步，初始化 ${num} 人局...`);
+
+        try {
+            let res = await fetch('/api/init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ num_players: num })
+            });
+            
+            if (res.ok) {
+                let data = await res.json();
+                console.log('[Lobby Success] 後端 C 核心初始化成功：', data);
+                window.location.href = '/board';
+            } else {
+                throw new Error('後端神殿初始化拒絕');
+            }
+        } catch (error) {
+            alert(`神殿開局失敗: ${error.message}`);
+            buttons.forEach(b => b.disabled = false);
         }
     }
+
+    document.getElementById('btn-exit').addEventListener('click', () => {
+        if(confirm("確定要離開太陽神拉的戰局嗎？")) {
+            window.location.href = "about:blank";
+        }
+    });
+
+    // 🎯 新增防禦機制：解決瀏覽器上一頁/返回鍵導致按鈕被鎖死的問題
+    window.addEventListener('pageshow', function (event) {
+        const isBackNavigation = event.persisted || 
+            (window.performance && window.performance.navigation.type === 2);
+
+        if (isBackNavigation) {
+            console.log('[Lobby] 偵測到瀏覽器返回行為，正在重新激活所有大廳按鈕...');
+            
+            // 恢復人數按鈕
+            const buttons = document.querySelectorAll('.btn-player');
+            buttons.forEach(b => {
+                b.disabled = false;
+            });
+
+            // 恢復退出按鈕
+            const exitButton = document.getElementById('btn-exit');
+            if (exitButton) {
+                exitButton.disabled = false;
+            }
+        }
+    });
 </script>
 {% endblock %}

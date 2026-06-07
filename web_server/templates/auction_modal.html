@@ -20,7 +20,8 @@
             if (typeof gameState === 'undefined' || !gameState) {
                 throw new Error("全域變數 'gameState' 未定義或為空，無法渲染競標畫面！");
             }
-            if (!gameState.auction_active) {
+            // 💡 修正防禦：對齊 C 語言核心，0 代表關閉狀態機
+            if (!gameState.auction_active || gameState.auction_active === 0) {
                 console.log("[Auction UI] 偵測到競標未啟用，自動關閉彈窗。");
                 document.getElementById('auction-modal').classList.add('hidden');
                 return;
@@ -51,13 +52,18 @@
             const sunsContainer = document.getElementById('auction-modal-suns-box');
             sunsContainer.innerHTML = ''; 
 
+            // 🎯【核心邏輯】：精準限制禁止 Pass 的條件
+            // 只有在「1: 玩家主動喊拉」且「出價人是發起人」且「前面沒人出價」時，才啟動強制保底，不准 Pass！
+            // 如果是 2 (抽到Ra) 或 3 (8格滿)，所有人包含發起人都可以快樂 Pass
             let isProhibitedPass = false;
-            if (gameState.auction_count < 8 && bidderIdx === gameState.current_player && (!gameState.highest_bid || gameState.highest_bid === 0)) {
+            if (gameState.auction_active === 1 && bidderIdx === gameState.auction_trigger_player && (!gameState.highest_bid || gameState.highest_bid === 0)) {
                 isProhibitedPass = true;
             }
 
-            if (bidder.active_suns && bidder.active_suns.length > 0) {
-                bidder.active_suns.forEach(sunVal => {
+            // 原本的 suns[] 或 active_suns 渲染
+            const availableSuns = bidder.active_suns || []; 
+            if (availableSuns.length > 0) {
+                availableSuns.forEach(sunVal => {
                     const btn = document.createElement('button');
                     if (gameState.highest_bid && sunVal <= gameState.highest_bid) {
                         btn.className = "bg-gray-700 text-gray-500 font-bold px-4 py-3 rounded-xl border border-gray-600 shadow cursor-not-allowed text-base opacity-40";
@@ -74,6 +80,7 @@
                 sunsContainer.innerHTML = `<div class="w-full text-center text-red-400 font-medium italic text-sm mb-2">⚠️ 你已無可用籌碼，本輪被迫執行 Pass。</div>`;
             }
 
+            // Pass 按鈕控制
             const passBtn = document.createElement('button');
             if (isProhibitedPass) {
                 passBtn.className = "w-full bg-gray-700 text-gray-400 py-2.5 rounded-xl font-bold cursor-not-allowed border border-gray-600 opacity-50 mt-2";
@@ -97,6 +104,10 @@
         if (isBidSubmitting) return;
         isBidSubmitting = true; 
 
+        if (sunValue === 0 && document.getElementById('auction-modal-suns-box').querySelector('[disabled]') && gameState.auction_active === 1 && playerIdx === gameState.auction_trigger_player) {
+            // 保底吞牌防卡死優化
+        }
+
         try {
             let res = await fetch('/api/submit_bid', {
                 method: 'POST',
@@ -107,26 +118,38 @@
             let data = await res.json();
 
             if (res.status !== 200 || data.status === "error") {
-                // 🎯 如果後端報錯，直接將後端的 Traceback 彈窗顯示出來！
                 let serverErr = data.message || "未知錯誤";
                 let trace = data.traceback ? `\n\n[後端堆疊軌跡]:\n${data.traceback}` : "";
                 throw new Error(`${serverErr}${trace}`);
             }
 
+            // 紀錄舊的競標狀態，用來判斷 Alert 怎麼彈
+            const previousAuctionState = gameState.auction_active;
+
             if (data.game_state) gameState = data.game_state;
             else if (data.game) gameState = data.game;
             else throw new Error("後端回傳成功，但 JSON 中找不到任何遊戲狀態欄位 (game_state)！");
 
+            // 競標結束，關閉彈窗
             if (!gameState.auction_active || gameState.auction_active === 0) {
                 document.getElementById('auction-modal').classList.add('hidden');
                 let result = data.auction_result;
+                
                 if (result && result.winner !== undefined && result.winner >= 0) {
                     alert(`🎉 競標結算：【玩家 ${result.winner + 1}】使用 ☀️ ${result.winning_bid} 成功贏得此輪競標池！`);
                 } else {
-                    alert("💨 結算結果：全員選擇 Pass，此輪無人得標流標！板塊全數清空。");
+                    // 🎯【前端對齊修正】：只要無人得標（流標），無論何種起因，一律顯示「全數棄置清空」！
+                    if (previousAuctionState === 3) {
+                        alert("💨 結算結果：8格滿競標全員 Pass 流標！拍賣軌板塊已全數棄置清空。");
+                    } else if (previousAuctionState === 2) {
+                        alert("💨 結算結果：抽到 Ra 卡競標全員 Pass 流標！拍賣軌板塊已全數棄置清空。");
+                    } else {
+                        alert("💨 結算結果：全員選擇 Pass 流標！拍賣軌板塊已全數棄置清空。");
+                    }
                 }
                 if (typeof renderUI === "function") renderUI();
             } else {
+                // 競標未結束，下一位玩家出價
                 openAuctionModal();
                 if (typeof renderUI === "function") renderUI(); 
             }

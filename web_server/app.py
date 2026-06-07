@@ -2,6 +2,12 @@
 from flask import Flask, jsonify
 import traceback
 from routes import main_bp
+import sys
+import io
+
+# 🎯 強制指定 Python 終端機輸出的編碼為 UTF-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 app = Flask(__name__)
 
@@ -79,14 +85,14 @@ def get_game_state_json(gs):
                 # 只要不是未填入的空槽 (-1) 或是未初始化的 0 值垃圾資料就打包
                 if tile.type != -1 and tile.type >= 0:
                     detailed_hand.append({
+                        "type_id": tile.type,  # 🎯 統一前端變數命名格式
                         "type": tile.type,
+                        "value_id": tile.value, # 🎯 發放手牌也要帶有子數值型號
                         "value": tile.value,
                         "name": get_tile_name(tile.type, tile.value)
                     })
 
             # 組裝單一玩家的 JSON 資料物件
-            # 🎯 關鍵修正：這裡保持 0-based，與前端對齊。
-            # 如果你的前端預期是 1-based，請改成 p.player_id + 1，但必須確保與 engine_bridge.py 絕對一致！
             players_data.append({
                 "player_id": int(p.player_id), 
                 "score": int(p.score),
@@ -101,14 +107,22 @@ def get_game_state_json(gs):
         auction_track = []
         for m in range(safe_auction_count):
             t = gs.auction_track[m]
+            # 🎯 補上 value 和 value_id，儲存格資料防禦
             auction_track.append({
                 "type_id": t.type, 
+                "type": t.type,
+                "value_id": t.value,
+                "value": t.value,
                 "name": get_tile_name(t.type, t.value)
             })
 
-        is_auction_active = bool(gs.auction_active)
-        forced_auction_flag = bool(gs.auction_count >= 8 and is_auction_active)
+        # 🎯【關鍵修復一】：不要轉成 bool！直接保留 C 底層的狀態碼整數給前端（0, 1, 2, 3）
+        raw_auction_active = int(gs.auction_active)
 
+        # 🎯【關鍵修復二】：利用 C 核心新狀態，極簡且精準地指派強制競標旗標 (給相容舊版前端使用)
+        # 2 (抽到Ra) 或 3 (8格滿) 皆屬於強制競標
+        forced_auction_flag = True if raw_auction_active in [2, 3] else False
+                
         packed_dict = {
             "num_players": int(gs.num_players),
             "current_player": int(gs.current_player),
@@ -118,22 +132,27 @@ def get_game_state_json(gs):
             "center_sun": int(gs.center_sun),
             "auction_count": int(gs.auction_count), 
             "auction_track": auction_track,
-            "auction_active": is_auction_active,
+            "auction_active": raw_auction_active,  # 🚀 現在傳回的是 0, 1, 2, 3 整數
             "highest_bid": int(gs.highest_bid),
             "highest_bidder": int(gs.highest_bidder),
             "current_bidder": int(gs.current_bidder),
             "game_over": bool(gs.game_over),
             "players": players_data,
-            "forced_auction": forced_auction_flag
+            "forced_auction": forced_auction_flag   # 🚀 根據 C 核心狀態完美對齊的相容旗標
         }
         
-        print(f"[Backend Packer Success] 打包完成。當前輪位資訊 -> 玩家: {packed_dict['current_player']}, 出價者: {packed_dict['current_bidder']}")
+        # 💡 新增追蹤欄位防止前端在老代碼中找不到發起人
+        if hasattr(gs, 'auction_trigger_player'):
+            packed_dict["auction_trigger_player"] = int(gs.auction_trigger_player)
+        else:
+            packed_dict["auction_trigger_player"] = int(gs.current_player)
+
+        print(f"[Backend Packer Success] 打包完成。當前輪位資訊 -> 玩家: {packed_dict['current_player']}, 狀態碼: {packed_dict['auction_active']}, 強制競標: {packed_dict['forced_auction']}")
         return packed_dict
 
     except Exception as e:
         print("\n🔥 [💥 app.py 打包工具崩潰] get_game_state_json 發生重大錯誤！")
         traceback.print_exc()
-        # 為了不讓前端拿到空資料無聲卡死，這裡主動拋出異常讓路由層捕獲
         raise e
 
 # 將狀態打包工具函數掛載到 app.config 中
@@ -143,5 +162,5 @@ app.config['STATE_PACKER'] = get_game_state_json
 # ==================== 啟動伺服器 ====================
 if __name__ == '__main__':
     print("[System] Ra 太陽神後端 Web 伺服器啟動中...")
-    print("[System] 已修復：列舉對齊、玩家 ID 錯位與全防禦除錯機制。")
+    print("[System] 已修復：列舉對齊、狀態機整數穿透與流標清空對齊。")
     app.run(debug=True, port=5000)
