@@ -1,93 +1,150 @@
 <div id="player-hand-modal" 
-     class="fixed inset-0 bg-gray-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200" 
+     class="fixed inset-0 bg-gray-950/85 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-300" 
      onclick="if(event.target === this) closeHandModal()">
     
-    <div class="bg-gray-800 border border-gray-700 w-full max-w-lg p-6 rounded-2xl shadow-2xl transform scale-95 transition-transform duration-200 flex flex-col max-h-[85vh]">
+    <div class="relative rounded-2xl shadow-2xl transform scale-95 transition-transform duration-300 overflow-hidden border border-gray-700"
+         style="
+            width: 1200px;        /* 🛠️ 自訂整個大面板的寬度 */
+            height: 760px;        /* 🛠️ 自訂整個大面板的高度 */
+         ">
         
-        <div class="flex justify-between items-center border-b border-gray-700/70 pb-3 mb-4">
-            <h3 id="hand-modal-title" class="text-base sm:text-lg font-black text-yellow-400 flex items-center gap-2">
-                📋 玩家板塊資產清單
-            </h3>
-            <button onclick="closeHandModal()" class="text-gray-400 hover:text-gray-100 text-xl font-bold p-1 transition">
-                ✕
-            </button>
-        </div>
+        <img id="hand-board-bg" 
+             src="/static/images/手牌畫面.png" 
+             alt="Board Background"
+             class="absolute inset-0 w-full h-full block select-none pointer-events-none object-fill z-0"
+        />
 
-        <div class="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-700">
-            <div id="hand-tiles-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                </div>
-            
-            <div id="hand-empty-hint" class="text-center py-12 text-gray-500 italic text-sm hidden">
-                <div class="text-3xl mb-2">🏜️</div>
-                該玩家目前兩手空空，趕快去贏一池拍賣吧！
+        <div id="hand-tiles-board" class="absolute inset-0 pointer-events-none z-30 isolate">
             </div>
-        </div>
 
-        <div class="border-t border-gray-700/70 mt-4 pt-3 flex justify-end">
-            <button onclick="closeHandModal()" 
-                    class="bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold px-6 py-2 rounded-xl text-xs transition shadow active:scale-95">
-                關閉視窗
-            </button>
-        </div>
+        <button onclick="closeHandModal()" 
+                class="absolute top-4 right-4 z-40 text-gray-400 hover:text-white bg-black/50 hover:bg-black/80 font-bold text-xl px-3 py-1 rounded-full transition duration-150 border border-white/10 shadow-lg">
+            ✕
+        </button>
+        
     </div>
 </div>
 
 <script>
+    // 🎯 【18 種具體板塊的獨立控制表：包含位置(top, left)、個別寬高(w, h)與獨立間距(gap)】
+    // 💡 調整 gap 參數即可控制該板塊與下方數字的垂直距離（例如：'28px'、'16px'）
+    const TILE_POSITIONS = {
+        // --- 基礎板塊 (已移除 Ra) ---
+        "1_1": { top: '26.6%', left: '50.3%', w: '100px', h: '110px', gap: '28px' }, // 法老 Pharaoh
+        "3_1": { top: '26.6%', left: '33.6%', w: '100px', h: '110px', gap: '28px' }, // 尼羅河 Nile
+        "6_1": { top: '26.6%', left: '83.7%', w: '100px', h: '110px', gap: '28px' }, // 神明 God
+        "7_1": { top: '26.6%', left: '67%',   w: '100px', h: '110px', gap: '28px' }, // 金幣 Gold
+        "8_1": { top: '26.6%', left: '16.8%', w: '100px', h: '110px', gap: '28px' }, // 洪水 Flood
+
+        // --- 5 種文明板塊 (Type 4) ---
+        "4_1": { top: '52%', left: '33.6%', w: '100px', h: '110px', gap: '28px' },  // 文明-火 Fire
+        "4_2": { top: '52%', left: '16.8%', w: '100px', h: '110px', gap: '28px' },  // 文明-農業 Field
+        "4_3": { top: '52%', left: '83.7%', w: '100px', h: '110px', gap: '28px' },  // 文明-文學 Text
+        "4_4": { top: '52%', left: '50.3%', w: '100px', h: '110px', gap: '28px' },  // 文明-天文 Star
+        "4_5": { top: '51.8%', left: '67%',   w: '100px', h: '115px', gap: '28px' },  // 文明-藝術 Paint
+
+        // --- 8 種建築板塊 (Type 5) ---
+        "5_1": { top: '77%', left: '16.8%', w: '100px', h: '110px', gap: '29px' },  // 建築 1
+        "5_2": { top: '77%', left: '36%', w: '100px', h: '110px', gap: '29px' },  // 建築 2
+        "5_3": { top: '77%', left: '45.4%', w: '100px', h: '110px', gap: '29px' },  // 建築 3
+        "5_4": { top: '77%', left: '55.2%', w: '100px', h: '110px', gap: '29px' },  // 建築 4
+        "5_5": { top: '77%', left: '64.4%', w: '100px', h: '110px', gap: '29px' },  // 建築 5
+        "5_6": { top: '77%', left: '74.4%', w: '100px', h: '110px', gap: '29px' },  // 建築 6
+        "5_7": { top: '77%', left: '26.4%', w: '100px', h: '110px', gap: '29px' },  // 建築 7
+        "5_8": { top: '77%', left: '83.8%', w: '100px', h: '110px', gap: '29px' }   // 建築 8
+    };
+
+    // 🎯 【圖片路徑對照函式】
+    function getTileImageUrl(type, value) {
+        const basePath = '/static/images/tiles/';
+        const safeValue = parseInt(value, 10) || 1;
+        const safeType = parseInt(type, 10);
+
+        switch(safeType) {
+            case 0: return `${basePath}ra.png`;
+            case 1: return `${basePath}pharaoh.png`;
+            case 3: return `${basePath}nile.png`;
+            case 6: return `${basePath}god.png`;
+            case 7: return `${basePath}gold.png`;
+            case 8: return `${basePath}flood.png`;
+
+            case 4: // 🌾 文明
+                const civTypes = { 1: 'fire', 2: 'field', 3: 'text', 4: 'star', 5: 'paint' };
+                return `${basePath}civ_${civTypes[safeValue] || 'generic'}.png`;
+
+            case 5: // 📐 建築
+                return `${basePath}pyramid_type_${safeValue}.png`;
+
+            default:
+                return `${basePath}generic.png`;
+        }
+    }
+
     function openHandModal(playerIdx) {
-        // 安全檢查：防範 gameState 未載入完成
         if (!gameState || !gameState.players) return;
         const player = gameState.players.find(p => p.player_id == playerIdx);
         if (!player) return;
 
-        // 1. 動態更新標題
-        document.getElementById('hand-modal-title').innerHTML = `
-            <span>📋 玩家 ${playerIdx + 1} 持有明細</span>
-            <span class="text-xs font-normal text-gray-400 bg-gray-900 px-2 py-0.5 rounded-full border border-gray-700">
-                共 ${player.hand_count} 張
-            </span>
-        `;
+        // 初始化 18 種具體板塊的計數器
+        const detailedCounts = {};
+        Object.keys(TILE_POSITIONS).forEach(key => {
+            detailedCounts[key] = 0;
+        });
 
-        // 2. 清空並準備渲染
-        const listContainer = document.getElementById('hand-tiles-list');
-        const emptyHint = document.getElementById('hand-empty-hint');
-        listContainer.innerHTML = '';
-
-        if (!player.hand_tiles || player.hand_tiles.length === 0) {
-            emptyHint.classList.remove('hidden');
-        } else {
-            emptyHint.classList.add('hidden');
-            
-            // 3. 遍歷手牌進行渲染
+        // 讀取玩家當前手牌計算數量
+        if (player.hand_tiles && player.hand_tiles.length > 0) {
             player.hand_tiles.forEach(tile => {
-                let badgeStyle = "bg-gray-900/50 text-gray-300 border-gray-700";
+                const t = parseInt(tile.type, 10);
+                const v = parseInt(tile.value, 10) || 1;
+                const key = `${t}_${v}`;
                 
-                // 德式美術風格上色 (美化邊框與字體對比)
-                if (tile.type === 1) badgeStyle = "bg-sky-950/40 text-sky-400 border-sky-800/60";      // 法老 (藍)
-                if (tile.type === 3 || tile.type === 8) badgeStyle = "bg-blue-950/40 text-blue-400 border-blue-800/60"; // Nile / Flood (深藍)
-                if (tile.type === 4) badgeStyle = "bg-emerald-950/40 text-emerald-400 border-emerald-800/60"; // 文明 (綠)
-                if (tile.type === 5) badgeStyle = "bg-amber-950/40 text-amber-400 border-amber-800/60";   // 金字塔 (黃)
-                if (tile.type === 7) badgeStyle = "bg-yellow-500/10 text-yellow-400 border-yellow-600/30"; // 金幣 (金黃)
-                if (tile.type === 6) badgeStyle = "bg-purple-950/40 text-purple-400 border-purple-800/60"; // 神明 (紫)
-                if (tile.type === 2) badgeStyle = "bg-rose-950/30 text-rose-400 border-rose-900/50";       // 災難 (紅/粉)
-
-                const tileHtml = `
-                    <div class="border ${badgeStyle} px-3.5 py-3 rounded-xl font-bold text-xs flex justify-between items-center shadow-sm hover:brightness-110 transition duration-150">
-                        <span class="truncate pr-2">${tile.name}</span>
-                        <span class="text-[9px] uppercase font-mono tracking-wider opacity-40 bg-black/20 px-1.5 py-0.5 rounded">
-                            T-${tile.type}
-                        </span>
-                    </div>
-                `;
-                listContainer.insertAdjacentHTML('beforeend', tileHtml);
+                if (detailedCounts[key] !== undefined) {
+                    detailedCounts[key]++;
+                }
             });
         }
 
-        // 4. 動畫流暢開啟彈窗
+        const boardContainer = document.getElementById('hand-tiles-board');
+        boardContainer.innerHTML = '';
+
+        // 遍歷渲染 18 個獨立的彩色板塊
+        Object.keys(TILE_POSITIONS).forEach(key => {
+            const pos = TILE_POSITIONS[key];
+            const parts = key.split('_');
+            const typeId = parseInt(parts[0], 10);
+            const valueId = parseInt(parts[1], 10);
+            
+            const currentCount = detailedCounts[key];
+            const imgUrl = getTileImageUrl(typeId, valueId);
+            
+            // 抓取個別設定值
+            const tileW = pos.w || '55px';
+            const tileH = pos.h || '55px';
+            const customGap = pos.gap || '16px'; // 若沒設定則預設 16px
+
+            // 🎯 style="row-gap: ${customGap};"：由內聯樣式精準控制個別數字推開的距離
+            const itemHtml = `
+                <div class="absolute pointer-events-auto select-none transition-all duration-300 flex flex-col items-center"
+                     style="top: ${pos.top}; left: ${pos.left}; transform: translate(-50%, -50%); row-gap: ${customGap};">
+                    
+                    <img src="${imgUrl}" 
+                         alt="tile-${key}" 
+                         class="rounded-lg object-fill block drop-shadow-[0_4px_6px_rgba(0,0,0,0.4)]"
+                         style="width: ${tileW}; height: ${tileH};" 
+                    />
+                    
+                    <span class="text-black text-xl font-black tracking-wide text-center leading-none">
+                        ${currentCount}
+                    </span>
+                </div>
+            `;
+            boardContainer.insertAdjacentHTML('beforeend', itemHtml);
+        });
+
+        // 開啟面版
         const modal = document.getElementById('player-hand-modal');
         const content = modal.querySelector('div');
-        
         modal.classList.remove('hidden');
-        // 透過 setTimeout 避開瀏覽器渲染優化，順暢觸發 CSS Transition
         setTimeout(() => {
             modal.classList.remove('opacity-0');
             content.classList.remove('scale-95');
@@ -97,13 +154,8 @@
     function closeHandModal() {
         const modal = document.getElementById('player-hand-modal');
         const content = modal.querySelector('div');
-        
         modal.classList.add('opacity-0');
         content.classList.add('scale-95');
-        
-        // 等待淡出動畫結束後再隱藏 DOM 節點
-        setTimeout(() => {
-            modal.classList.add('hidden');
-        }, 200);
+        setTimeout(() => { modal.classList.add('hidden'); }, 200);
     }
 </script>

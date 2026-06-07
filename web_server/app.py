@@ -161,6 +161,4 @@ app.config['STATE_PACKER'] = get_game_state_json
 
 # ==================== 啟動伺服器 ====================
 if __name__ == '__main__':
-    print("[System] Ra 太陽神後端 Web 伺服器啟動中...")
-    print("[System] 已修復：列舉對齊、狀態機整數穿透與流標清空對齊。")
     app.run(debug=True, port=5000)
