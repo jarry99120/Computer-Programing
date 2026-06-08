@@ -95,8 +95,6 @@ void init_game(GameState* gs, int num_players) {
         deck_idx++;
     }
 
-    // F. 太陽神拉板塊 (Ra) : 20個
-    for (int i = 0; i < 20; i++) {
         gs->deck[deck_idx].type = TILE_RA; 
         gs->deck[deck_idx].value = 1;
         deck_idx++;
