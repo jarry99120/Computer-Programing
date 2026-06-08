@@ -96,8 +96,8 @@ void init_game(GameState* gs, int num_players) {
         deck_idx++;
     }
 
-    // F. 太陽神拉板塊 (Ra) : 30個
-    for (int i = 0; i < 30; i++) {
+    // F. 太陽神拉板塊 (Ra) : 20個
+    for (int i = 0; i < 20; i++) {
         gs->deck[deck_idx].type = TILE_RA; 
         gs->deck[deck_idx].value = 1;
         deck_idx++;
@@ -195,6 +195,22 @@ Tile draw_tile(GameState* gs) {
         }
     }
     return drawn;
+}
+
+int remove_tiles_by_type(Player* p, TileType type, int count) {
+    int removed = 0;
+    // 從陣列尾端開始移除，避免索引錯亂
+    for (int i = p->hand_count - 1; i >= 0 && removed < count; i--) {
+        if (p->hand[i].type == type) {
+            // 移除該張，將後面的板塊往前補位
+            for (int j = i; j < p->hand_count - 1; j++) {
+                p->hand[j] = p->hand[j + 1];
+            }
+            p->hand_count--;
+            removed++;
+        }
+    }
+    return removed;
 }
 
 int add_to_auction(GameState* gs, Tile tile) {
@@ -380,6 +396,27 @@ void end_epoch(GameState* gs) {
     }
 }
 
+void resolve_disaster_immediate(Player* p, int disaster_value) {
+    printf("[C Core] 災難發生！類型代碼: %d\n", disaster_value);
+    
+    switch(disaster_value) {
+        case 3: // 駕崩：移除 2 個法老
+            remove_tiles_by_type(p, TILE_PHARAOH, 2);
+            break;
+        case 2: // 地震：移除 2 個建築
+            remove_tiles_by_type(p, TILE_PYRAMID, 2);
+            break;
+        case 4: // 戰亂：移除 2 個文明
+            remove_tiles_by_type(p, TILE_CIVILIZATION, 2);
+            break;
+        case 1: // 乾旱：優先移除 2 個洪水，不夠再移除尼羅河
+            int removed_flood = remove_tiles_by_type(p, TILE_FLOOD, 2);
+            if (removed_flood < 2) {
+                remove_tiles_by_type(p, TILE_NILE, 2 - removed_flood);
+            }
+            break;
+    }
+}
 
 // =================================================================
 // 🌋 區塊四：拍賣池拾取與災難處理
@@ -388,19 +425,31 @@ void end_epoch(GameState* gs) {
 void resolve_auction_win(GameState* gs, int winner_idx, int win_bid) {
     Player* winner = &gs->players[winner_idx];
 
+    // 1. 先將所有獲得的板塊放入手牌
     for (int i = 0; i < gs->auction_count; i++) {
         Tile tile = gs->auction_track[i];
-        if (tile.type == TILE_DISASTER) {
-            resolve_disaster_immediate(winner, tile.value);
+        if (winner->hand_count < 50) {
+            winner->hand[winner->hand_count++] = tile;
         } else {
-            if (winner->hand_count < 50) {
-                winner->hand[winner->hand_count++] = tile;
-            } else {
-                printf("[C Warning] 玩家 %d 手牌空間已滿(50)，板塊遭強制遺棄！\n", winner_idx + 1);
-            }
+            printf("[C Warning] 玩家 %d 手牌已滿！\n", winner_idx + 1);
         }
     }
 
+    // 2. 掃描手牌中的災難板塊，並發動效果
+    // 注意：發動災難後，通常災難板塊會被移出手牌（視你的遊戲規則而定）
+    for (int i = winner->hand_count - 1; i >= 0; i--) {
+        if (winner->hand[i].type == TILE_DISASTER) {
+            resolve_disaster_immediate(winner, winner->hand[i].value);
+            
+            // 處理災難板塊本身：移除該災難板塊
+            for (int j = i; j < winner->hand_count - 1; j++) {
+                winner->hand[j] = winner->hand[j + 1];
+            }
+            winner->hand_count--;
+        }
+    }
+
+    // 3. 結算金錢流動
     for (int s = 0; s < 13; s++) {
         if (winner->suns[s] == win_bid && winner->sun_used[s] == 0) {
             int temp = winner->suns[s];
@@ -411,10 +460,12 @@ void resolve_auction_win(GameState* gs, int winner_idx, int win_bid) {
         }
     }
     
+    // 4. 重置拍賣狀態
     gs->current_player = winner_idx;
     gs->auction_count = 0;
     gs->auction_active = 0; 
 
+    // 如果玩家沒有錢了，輪到下一位
     if (!has_available_suns(&gs->players[gs->current_player])) {
         next_player(gs);
     }

@@ -1,6 +1,5 @@
-// scoring.c 最頂端
-#include "game.h"     // 💡 一樣先引入核心結構，確保看得見 GameState 的手牌與分數！
-#include "scoring.h"  // 再引入計分模組
+#include "game.h"     // 引入核心結構
+#include "scoring.h"  // 引入計分標頭
 #include <stdio.h>
 #include <string.h>
 
@@ -17,13 +16,13 @@ static int count_civ_types(Player* p) {
     int seen[5] = {0};
     for (int i = 0; i < p->hand_count; i++)
         if (p->hand[i].type == TILE_CIVILIZATION)
-            seen[p->hand[i].value % 5] = 1;
+            seen[p->hand[i].value % 5] = 1; // 假設文明牌 value 1-5
     int total = 0;
     for (int i = 0; i < 5; i++) total += seen[i];
     return total;
 }
 
-// 內部輔助函式：棄置某一種類型的板塊（清除過期板塊用）
+// 內部輔助函式：棄置某一種類型的板塊
 static void discard_type(Player* p, TileType type) {
     int new_count = 0;
     for (int i = 0; i < p->hand_count; i++)
@@ -32,46 +31,17 @@ static void discard_type(Player* p, TileType type) {
     p->hand_count = new_count;
 }
 
-// 災難板塊立即結算：扣除 2 張對應牌
-void resolve_disaster_immediate(Player* p, int disaster_value) {
-    int target_type = -1;
-    if (disaster_value == 0)      target_type = TILE_NILE;
-    else if (disaster_value == 1) target_type = TILE_PHARAOH;
-    else if (disaster_value == 2) target_type = TILE_GOD;
-    else if (disaster_value == 3) target_type = TILE_CIVILIZATION;
+// =================================================================
+// 【注意】這裡已經移除 resolve_disaster_immediate 函式
+// 因為它現在由 game.c 統一維護，避免多重定義衝突
+// =================================================================
 
-    if (target_type == -1) return;
-
-    int removed = 0;
-
-    // 先扣除主要目標類型
-    for (int i = p->hand_count - 1; i >= 0 && removed < 2; i--) {
-        if (p->hand[i].type == target_type) {
-            p->hand[i] = p->hand[p->hand_count - 1];
-            p->hand_count--;
-            removed++;
-        }
-    }
-
-    // 如果是尼羅河災難（值為0）且主要牌不夠扣，則由「洪水牌」代扣
-    if (target_type == TILE_NILE && removed < 2) {
-        for (int i = p->hand_count - 1; i >= 0 && removed < 2; i--) {
-            if (p->hand[i].type == TILE_FLOOD) {
-                p->hand[i] = p->hand[p->hand_count - 1];
-                p->hand_count--;
-                removed++;
-            }
-        }
-    }
-    printf("💥 [災難結算] 玩家 %d 被迫棄置了 %d 張對應的發展板塊。\n", p->player_id + 1, removed);
-}
-
-// 時代結束計分（第 1, 2, 3 時代結束都會觸發）
+// 時代結束計分
 void score_epoch(GameState* gs) {
     int n = gs->num_players;
     printf("\n====== 第 %d 時代計分 ======\n", gs->current_epoch);
 
-    // 1. 法老王結算（多+5，少-2）
+    // 1. 法老王結算
     int pharaoh[5] = {0};
     int max_p = -1, min_p = 999;
     for (int i = 0; i < n; i++) {
@@ -88,27 +58,27 @@ void score_epoch(GameState* gs) {
         printf("  法老牌全部相同，不計分\n");
     }
 
-    // 2. 天神牌結算（每張 2 分，算完就棄置）
+    // 2. 天神牌結算
     for (int i = 0; i < n; i++) {
         int gods = count_type(&gs->players[i], TILE_GOD);
         if (gods > 0) {
             gs->players[i].score += gods * 2;
             printf("  玩家%d 神牌 %d 張 +%d\n", i+1, gods, gods*2);
-            discard_type(&gs->players[i], TILE_GOD); // 天神不留到下一時代
+            discard_type(&gs->players[i], TILE_GOD);
         }
     }
 
-    // 3. 金幣牌結算（每張 3 分，算完就棄置）
+    // 3. 金幣牌結算
     for (int i = 0; i < n; i++) {
         int gold = count_type(&gs->players[i], TILE_GOLD);
         if (gold > 0) {
             gs->players[i].score += gold * 3;
             printf("  玩家%d 金牌 %d 張 +%d\n", i+1, gold, gold*3);
-            discard_type(&gs->players[i], TILE_GOLD); // 金幣不留到下一時代
+            discard_type(&gs->players[i], TILE_GOLD);
         }
     }
 
-    // 4. 尼羅河與洪水結算（有洪水時，尼羅河與洪水每張各 1 分）
+    // 4. 尼羅河與洪水結算
     for (int i = 0; i < n; i++) {
         int nile  = count_type(&gs->players[i], TILE_NILE);
         int flood = count_type(&gs->players[i], TILE_FLOOD);
@@ -119,10 +89,10 @@ void score_epoch(GameState* gs) {
         } else {
             printf("  玩家%d 無洪水牌，尼羅河本輪不計分\n", i+1);
         }
-        discard_type(&gs->players[i], TILE_FLOOD); // 💡 洪水一定要棄置，尼羅河會保留下來
+        discard_type(&gs->players[i], TILE_FLOOD);
     }
 
-    // 5. 文明牌結算（根據不重複種類給分：0種-5分, 3種5分, 4種10分, 5種15分）
+    // 5. 文明牌結算
     for (int i = 0; i < n; i++) {
         int types = count_civ_types(&gs->players[i]);
         int pts = 0;
@@ -132,7 +102,6 @@ void score_epoch(GameState* gs) {
         else if (types == 5) pts = 15;
         gs->players[i].score += pts;
         printf("  玩家%d 文明 %d 種 %+d\n", i+1, types, pts);
-        // 💡 修正：文明牌在真實遊戲中「不會被棄置」，會留到下一時代累積！所以拿掉 discard_type 呼叫。
     }
 
     printf("  ── 本時代結束後總分 ──\n");

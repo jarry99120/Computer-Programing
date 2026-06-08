@@ -19,7 +19,7 @@
         <div id="panel-player" class="absolute bg-no-repeat bg-center bg-contain flex items-center justify-center text-black font-black text-2xl"
              style="background-image: url('/static/images/棕色.png'); width: 220px; height: 70px; left: 300px; top: 100px;">玩家 1</div>
         <div id="panel-ra" class="absolute bg-no-repeat bg-center bg-contain flex items-center justify-center text-black font-black text-2xl"
-             style="background-image: url('/static/images/棕色.png'); width: 220px; height: 70px; left: 540px; top: 100px;">RA: 0 / 10</div>
+             style="background-image: url('/static/images/棕色.png'); width: 220px; height: 70px; left: 540px; top: 100px;">RA: 0 / 9</div>
         <div id="panel-suns" class="absolute bg-no-repeat bg-center bg-contain flex items-center justify-center text-black font-black text-2xl"
              style="background-image: url('/static/images/棕色.png'); width: 220px; height: 70px; left: 780px; top: 100px;">中央籌碼: 0</div>
 
@@ -67,7 +67,7 @@
     function updatePanelTexts(generation, playerIdx, raCount, currentSuns) {
         document.getElementById('panel-gen').innerText = `第 ${generation || 0} 世代`;
         document.getElementById('panel-player').innerText = `玩家 ${playerIdx + 1}`;
-        document.getElementById('panel-ra').innerText = `RA: ${raCount} / 10`;
+        document.getElementById('panel-ra').innerText = `RA: ${raCount} / 9`;
         document.getElementById('panel-suns').innerText = `中央籌碼: ${currentSuns}`;
     }
 
@@ -122,7 +122,7 @@
             // Pass 按鈕
             const passBtn = document.createElement('button');
             passBtn.className = "bg-no-repeat bg-center bg-contain flex items-center justify-center font-bold text-black transition-transform duration-300 hover:scale-105 active:scale-95 w-32 h-14";
-            passBtn.style = "background-image: url('/static/images/按鈕_橘色.png'); background-size: 100% 100%;";
+            passBtn.style = "background-image: url('/static/images/btn_orange.png'); background-size: 100% 100%;";
             passBtn.innerText = "✋ Pass";
             passBtn.onclick = () => submitSingleBid(bidder.player_id, 0);
             passContainer.appendChild(passBtn);

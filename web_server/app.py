@@ -44,17 +44,13 @@ def get_tile_name(tile_type, tile_value):
         return f"{base_name} (型號 {tile_value})"
         
     if tile_type == 2:    # 災難板塊 (game.h 中災難是 2)
-        dis_names = {1: "戰亂 ", 2: "乾旱 ", 3: "地震 ", 4: "瘟疫 "}
+        dis_names = {1: "乾旱 ", 2: "地震 ", 3: "駕崩 ", 4: "戰亂 "}
         return f"🔥 {base_name} ({dis_names.get(tile_value, '未知型')})"
     
     return base_name
 
 def get_display_name(tile_type, tile_value):
-    """
-    更新後的中文顯示名稱邏輯：
-    1. 災難類型：戰亂、乾旱、地震、法老駕崩
-    2. 建築類型：顯示為 建築 1 ~ 建築 8
-    """
+
     ui_map = {
         0: "太陽神 Ra", 1: "法老", 2: "災難", 3: "尼羅河", 
         4: "文明", 5: "建築", 6: "神明", 7: "金幣", 8: "洪水"
@@ -64,10 +60,10 @@ def get_display_name(tile_type, tile_value):
     # 針對災難 (Type 2) 的特殊命名
     if tile_type == 2:
         dis = {
-            1: "戰亂 ", 
-            2: "乾旱 ", 
-            3: "地震 ", 
-            4: "法老駕崩 "
+            1: "乾旱 ", 
+            2: "地震 ", 
+            3: "駕崩 ", 
+            4: "戰亂 "
         }
         return f"{dis.get(tile_value, '未知')} ({base})"
     
@@ -186,4 +182,4 @@ app.config['STATE_PACKER'] = get_game_state_json
 
 # ==================== 啟動伺服器 ====================
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=8080)

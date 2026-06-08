@@ -21,6 +21,14 @@ typedef enum {
     TILE_FLOOD = 8
 } TileType;
 
+// 在 game.h 中新增
+typedef enum {
+    DISASTER_DROUGHT = 1,      // 乾旱 (對應尼羅河/洪水)
+    DISASTER_EARTHQUAKE = 2,   // 地震 (對應建築物/金字塔)
+    DISASTER_PHARAOH_DIES = 3, // 駕崩 (對應法老)
+    DISASTER_WAR = 4           // 戰亂 (對應文明)
+} DisasterType;
+
 typedef struct { 
     TileType type; 
     int value; 
@@ -72,6 +80,11 @@ int  run_auction(GameState* gs, int bids[], int num_bids);
 
 // 3️⃣ 拍賣池拾取與災難處理
 void resolve_auction_win(GameState* gs, int winner_idx, int win_bid); // 💡 公開給競標模組結算
+
+// ✨ 新增：災難結算與板塊移除輔助函式
+// 這樣可以在 game.c 以外的地方（如 AI 或測試程式）呼叫它們
+void resolve_disaster_immediate(Player* p, int disaster_value);
+int  remove_tiles_by_type(Player* p, TileType type, int count);
 
 // 4️⃣ 時代推進判斷
 int  is_epoch_over(GameState* gs);

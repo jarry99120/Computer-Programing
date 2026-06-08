@@ -187,37 +187,41 @@ def api_use_god_tile():
     """
     print("\n[Backend] Received /api/use_god_tile request...")
     try:
+        # 1. 遊戲狀態檢查
         if not game_initialized['status']:
             return jsonify({"success": False, "error": "Game not initialized"}), 400
 
+        # 2. 接收參數
         data = request.json or {}
         player_id = data.get('player_id')
-        track_index = data.get('track_index')  # 🎯 接收前端傳來的格子索引 (0 ~ 7)
+        track_index = data.get('track_index')
 
         if player_id is None or track_index is None:
             print("[God Action Error] player_id or track_index is None.")
             return jsonify({"success": False, "error": "Missing player_id or track_index"}), 400
 
-        # 🛑 安全性驗證：主回合驗證與狀態檢查
+        # 3. 安全性驗證：主回合驗證與狀態檢查
         if int(player_id) != int(gs.current_player):
             return jsonify({"success": False, "error": "It is not your turn to take action!"}), 400
 
         if int(gs.auction_active) != 0 or bool(gs.game_over):
             return jsonify({"success": False, "error": "Cannot use God tile right now."}), 400
 
-        # 驗證索引界限，防止前端傳入髒資料導致 C 指標越界崩潰
+        # 4. 索引界限驗證
         if int(track_index) < 0 or int(track_index) >= int(gs.auction_count):
             return jsonify({"success": False, "error": "Invalid board tile slot selection."}), 400
 
-        # 呼叫 C 核心新函式（將 track_index 傳入核心處理一換一）
+# --- routes.py 修改建議 ---
+        # 5. 呼叫 C 核心行動
         print(f"[Backend] Calling engine.player_use_god_tile(player_id={player_id}, track_index={track_index})...")
-        
-        # 🎯 ✨ 已修正：這裡直接傳入 gs，移除 ctypes.byref，與其他 API 呼叫規範保持對齊，防止指標錯誤崩潰
         success_code = engine.player_use_god_tile(gs, int(player_id), int(track_index))
-        print(f"[Backend] engine.player_use_god_tile() completed with code: {success_code}")
-
+        
+        # 6. 行動結果處理
         if success_code == 1:
-            # 狀態打包
+            # ❌ 刪除這行：engine.next_player(gs) 
+            # 因為 game.c 內部已經處理過轉移回合了，這裡再呼叫會導致雙重跳過
+            
+            # 狀態打包回傳
             packer = current_app.config['STATE_PACKER']
             updated_state = packer(gs)
 
@@ -227,7 +231,10 @@ def api_use_god_tile():
                 "message": "God tile exchange successfully executed."
             })
         else:
-            return jsonify({"success": False, "error": "Action rejected by core engine rules (Verify your hand or chosen tile)."}), 400
+            return jsonify({
+                "success": False, 
+                "error": "Action rejected by core engine rules (Verify your hand or chosen tile)."
+            }), 400
 
     except Exception as e:
         print("\n[CRITICAL ERROR] Exception occurred in api_use_god_tile!!")
