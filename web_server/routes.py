@@ -49,6 +49,10 @@ def cleanup_epoch_tiles(game_state):
 def index():
     return render_template('index.html')
 
+@main_bp.route('/rule')
+def rule():
+    return render_template('rule.html')
+
 @main_bp.route('/board')
 def board():
     try:

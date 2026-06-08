@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+
+{% block title %}遊戲規則 - 太陽神 Ra{% endblock %}
+
+{% block content %}
+<style>
+    /* 基礎重設 */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+    }
+
+    .lobby-body-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh; 
+    }
+
+    /* 遊戲主視窗外框 */
+    .game-wrapper {
+        background-color: #3d2a1d;
+        padding: 12px;
+        border-radius: 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+    }
+
+    /* 🎨 核心大畫布看板（改為動態背景流） */
+    .game-container {
+        width: 1550px;
+        height: 725px;
+        
+        /* 預設讀取第一張規則圖，採用與大廳相同的滿版設定 */
+        background-image: url("{{ url_for('static', filename='images/rules/1.png') }}");
+        background-size: 100% 100%; /* 確保規則圖完美填滿 1550x725 的畫布 */
+        background-position: center;
+        background-repeat: no-repeat;
+
+        border-radius: 12px;
+        position: relative; /* 🎯 讓按鈕可以絕對定位在畫面下方 */
+    }
+
+    /* ➔ 下一頁按鈕樣式（承襲大廳的高級沙岩質感） */
+    .btn-next {
+        width: 290px;
+        height: 60px;
+        background: linear-gradient(to bottom, #ebdcb9, #d0be96);
+        border: 3px solid #bba476;
+        border-radius: 8px;
+        font-size: 24px;
+        font-weight: bold;
+        color: #2a2a2a;
+        cursor: pointer;
+        box-shadow: 0 6px 10px rgba(0,0,0,0.4);
+        transition: all 0.2s ease;
+
+        /* 🎯 絕對定位：將按鈕固定在畫面正下方靠上一點點的位置 */
+        position: absolute;
+        bottom: 40px; 
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .btn-next:hover {
+        background: linear-gradient(to bottom, #f5e8c8, #decba3);
+        transform: translateY(-3px) translateX(-50%); /* 保持置中並往上飄 */
+        box-shadow: 0 8px 15px rgba(0,0,0,0.5);
+    }
+
+    .btn-next:active {
+        transform: translateY(1px) translateX(-50%);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    }
+</style>
+
+<div class="lobby-body-wrapper">
+    <div class="game-wrapper">
+        <div class="game-container" id="rule-board">
+            
+            <button type="button" id="next-btn" class="btn-next">下一頁</button>
+            
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentStep = 1;
+    const totalSteps = 9;
+
+    const ruleBoard = document.getElementById('rule-board');
+    const nextBtn = document.getElementById('next-btn');
+
+    // 💡 預先抓取第一張圖的 Flask 靜態路徑範本 (例如: /static/images/rules/1.png)
+    const baseImageUrl = "{{ url_for('static', filename='images/rules/1.png') }}";
+
+    nextBtn.addEventListener('click', () => {
+        if (currentStep < totalSteps) {
+            currentStep++;
+            
+            // 🎯 關鍵核心：利用 String.replace 把路徑裡的 "1.png" 改成 "2.png"、"3.png"...
+            const nextImageUrl = baseImageUrl.replace('1.png', `${currentStep}.png`);
+            
+            // 變更畫布的背景圖
+            ruleBoard.style.backgroundImage = `url('${nextImageUrl}')`;
+
+            // 如果切換到最後一張 9.png，直接把按鈕文字和外觀升級
+            if (currentStep === totalSteps) {
+                nextBtn.innerText = "進入遊戲，覲見法老！";
+                
+                // 換成橘紅色的法老警告色，提醒玩家點下去就要開戰了
+                nextBtn.style.background = "linear-gradient(to bottom, #e09260, #c37341)";
+                nextBtn.style.borderColor = "#a45a2d";
+                nextBtn.style.color = "#1a1a1a";
+            }
+        } else {
+            // 🚀 9 張圖全看完了，大步邁向戰局！
+            window.location.href = '/board';
+        }
+    });
+</script>
+{% endblock %}
