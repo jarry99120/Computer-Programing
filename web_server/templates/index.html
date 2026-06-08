@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}首頁 — 太陽神 Ra{% endblock %}
+{% block title %}太陽神 Ra{% endblock %}
 
 {% block content %}
 <style>
@@ -164,24 +164,19 @@
         console.log(`[Lobby] 正在與後端神殿同步，初始化 ${num} 人局...`);
 
         try {
-            let res = await fetch('/api/init', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ num_players: num })
-            });
-            
-            if (res.ok) {
-                let data = await res.json();
-                console.log('[Lobby Success] 後端 C 核心初始化成功：', data);
-                window.location.href = '/board';
-            } else {
-                throw new Error('後端神殿初始化拒絕');
-            }
-        } catch (error) {
-            alert(`神殿開局失敗: ${error.message}`);
-            buttons.forEach(b => b.disabled = false);
+        let res = await fetch('/api/init', { // 確保路由是 /api/init
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ num_players: num }) // 關鍵：一定要傳這個
+        });
+        
+        if (res.ok) {
+            window.location.href = '/board';
         }
+    } catch (error) {
+        alert("初始化失敗");
     }
+}
 
     document.getElementById('btn-exit').addEventListener('click', () => {
         if(confirm("確定要離開太陽神拉的戰局嗎？")) {

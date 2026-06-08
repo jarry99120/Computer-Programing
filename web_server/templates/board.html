@@ -39,7 +39,7 @@
         width: 100vw;
         height: 100vh;
         overflow: hidden;
-        /* 禁止整個頁面滾動 */
+        /* 禁止整個網頁大視窗滾動 */
     }
 
     /* 🪵 統一的棕色面板樣式 */
@@ -90,11 +90,10 @@
         z-index: 10;
     }
 
-    /* 🚀 遊戲主要內容區域 (內容若過多，將自動在此區域內滾動) */
+    /* 🚀 遊戲主要內容區域 */
     .main-container {
         position: absolute;
         top: 150px;
-        /* 修改這裡：數值越小，距離上面越近 */
         left: 0;
         right: 0;
         bottom: 0;
@@ -102,8 +101,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        overflow: hidden;
-        /* 已鎖定滾動 */
+        /* 🎯【UI修正】：改為 auto。當卡片或內容超出螢幕高度時，允許在此區域內垂直滾動，才不會切掉面板 */
+        overflow-y: auto; 
     }
 
     /* 拍賣區塊樣式 */
@@ -140,11 +139,9 @@
         background-size: 100% 100%;
         background-repeat: no-repeat;
         width: 1000px;
-        /* 直接寫死寬度 */
         min-height: 150px;
         display: flex;
         align-items: center;
-        /* 讓卡片垂直置中 */
         justify-content: flex-start;
         padding-left: 90px;
         gap: 20px;
@@ -157,7 +154,6 @@
         font-size: 14px;
         font-weight: 900;
         background-color: rgba(255, 241, 201, 0.9);
-        /* 淺色半透明底 */
         color: black;
         text-align: center;
         width: 80px;
@@ -167,16 +163,11 @@
 
     /* 自訂按鈕樣式 */
     .custom-orange-btn {
-        /* 這裡改成英文檔名 */
         background-image: url('/static/images/btn_orange.png');
-
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-
-        /* 備用顏色：如果圖片讀取失敗，按鈕會變成橘色，這樣你才知道它有成功套用樣式 */
         background-color: orange;
-
         width: 150px;
         height: 55px;
         display: flex;
@@ -191,7 +182,6 @@
 
     .custom-orange-btn:hover {
         filter: brightness(1.1);
-        /* 滑鼠懸停時微亮 */
         transform: scale(1.05);
     }
 
@@ -206,33 +196,24 @@
     }
 
     .custom-player-card {
-        /* 如果不想改檔名，請確保這裡的檔名與圖片檔完全一致 */
         background-image: url('/static/images/玩家區.png');
         background-size: 100% 100%;
-        /* 強制拉伸填滿 */
         background-repeat: no-repeat;
-
-        /* 移除原本的背景色，讓圖片完整顯示 */
         background-color: transparent;
-
-        /* 設定內距確保內容不會黏邊 */
         padding: 20px;
         border-radius: 16px;
         border: 2px solid transparent;
-        /* 預設邊框透明 */
         transition: all 0.2s;
     }
 
-    /* 針對選中狀態的樣式調整 (用亮框代替背景色，避免遮住圖片) */
+    /* 針對選中狀態的樣式調整 */
     .player-card-active {
         border-color: #fbbf24;
-        /* 金黃色邊框 */
         box-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
     }
 
     .player-card-bidder {
         border-color: #a855f7;
-        /* 紫色邊框 */
         box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
     }
 </style>
@@ -243,8 +224,7 @@
 <div id="lbl-center-sun" class="brown-panel">中央籌碼: [1]</div>
 
 <div class="main-container">
-    <div id="auction-track-box" class="brown-track-panel">
-    </div>
+    <div id="auction-track-box" class="brown-track-panel"></div>
 
     <div id="action-buttons-group" class="flex flex-wrap justify-center gap-6 mt-8 mb-8">
         <button id="btn-draw" onclick="drawTile()" class="custom-orange-btn">抽牌</button>
@@ -268,6 +248,7 @@
         </button>
     </div>
 </div>
+
 <div id="menu-btn-container" class="fixed bottom-[10px] right-[90px] z-[100]">
     <button onclick="returnToMainMenu()" class="custom-orange-btn !w-[180px] !h-[60px]">
         返回主選單
@@ -275,7 +256,7 @@
 </div>
 
 <script>
-    // --- 補上這段定義，確保 showResultModal 可被全域呼叫 ---
+    // --- 確保 showResultModal 可被全域呼叫 ---
     window.showResultModal = function (winnerId, bidAmount) {
         console.log("DEBUG: showResultModal 函式被呼叫了！");
         const modal = document.getElementById('result-modal');
@@ -294,11 +275,12 @@
 
         modal.classList.remove('hidden');
     };
+
     function cleanTileName(name) {
         if (!name) return "";
         return name.split('(')[0].trim();
     }
-    // ----------------------------------------------------
+
     let gameState = null;
     let isGodExchangeMode = false;
 
@@ -328,22 +310,11 @@
             case 8: return `${basePath}flood.png`;
 
             case 2:
-                const disasters = {
-                    1: 'drought',
-                    2: 'earthquake',
-                    3: 'pharaoh_dies',
-                    4: 'war'
-                };
+                const disasters = { 1: 'drought', 2: 'earthquake', 3: 'pharaoh_dies', 4: 'war' };
                 return `${basePath}disaster_${disasters[safeValue] || 'generic'}.png`;
 
             case 4:
-                const civTypes = {
-                    1: 'fire',
-                    2: 'field',
-                    3: 'text',
-                    4: 'star',
-                    5: 'paint'
-                };
+                const civTypes = { 1: 'fire', 2: 'field', 3: 'text', 4: 'star', 5: 'paint' };
                 return `${basePath}civ_${civTypes[safeValue] || 'generic'}.png`;
 
             case 5:
@@ -354,70 +325,71 @@
         }
     }
 
-function renderUI() {
-    if (!gameState) return;
+    function renderUI() {
+        if (!gameState) return;
+        const maxRa = { 2: 9, 3: 9, 4: 9, 5: 9 }[gameState.players.length] || 8;
 
-    // 1. 更新頂部資訊面板
-    document.getElementById('lbl-epoch').innerText = `第 ${gameState.current_epoch} 時代`;
-    document.getElementById('lbl-ra-track').innerText = `RA: ${gameState.sun_boat_position} / 9`;
-    document.getElementById('lbl-center-sun').innerText = `中央籌碼: ${gameState.center_sun}`;
+        // 1. 更新頂部資訊面板
+        document.getElementById('lbl-epoch').innerText = `第 ${gameState.current_epoch} 時代`;
+        document.getElementById('lbl-ra-track').innerText = `RA: ${gameState.sun_boat_position} / ${maxRa}`;
+        document.getElementById('lbl-center-sun').innerText = `中央籌碼: ${gameState.center_sun}`;
 
-    let turnLbl = document.getElementById('lbl-current-turn');
-    if (gameState.game_over) {
-        turnLbl.innerText = `遊戲結束`;
-    } else {
-        turnLbl.innerText = `玩家 ${gameState.current_player + 1} 的回合`;
-    }
-
-    // 2. 渲染拍賣區
-    let trackBox = document.getElementById('auction-track-box');
-    trackBox.innerHTML = ''; 
-
-    for (let i = 0; i < 8; i++) {
-        if (i < gameState.auction_track.length) {
-            let tile = gameState.auction_track[i];
-            let wrapper = document.createElement('div');
-            wrapper.className = "flex flex-col items-center w-20";
-
-            let img = document.createElement('div');
-            if (isGodExchangeMode) {
-                img.className = "w-20 h-20 rounded-xl border-2 border-purple-400 animate-pulse cursor-pointer ring-4 ring-purple-500/30";
-                img.setAttribute('onclick', `executeGodExchange(${i}, '${tile.name}')`);
-            } else {
-                img.className = "w-20 h-20 rounded-xl border-2 border-amber-500 shadow-lg bg-gray-900";
-            }
-
-            const currentType = (tile.type_id !== undefined) ? tile.type_id : tile.type;
-            const currentValue = (tile.value_id !== undefined) ? tile.value_id : tile.value;
-            img.style.backgroundImage = `url('${getTileImageUrl(currentType, currentValue)}')`;
-            img.style.backgroundSize = "cover";
-
-            let nameLabel = document.createElement('p');
-            nameLabel.innerText = cleanTileName(tile.display_name || tile.name);
-            nameLabel.className = "text-[12px] font-black bg-amber-100/90 text-black px-1 py-0.5 rounded shadow-sm text-center w-full truncate mt-1";
-
-            wrapper.appendChild(img);
-            wrapper.appendChild(nameLabel);
-            trackBox.appendChild(wrapper);
+        let turnLbl = document.getElementById('lbl-current-turn');
+        if (gameState.game_over) {
+            turnLbl.innerText = `遊戲結束`;
+        } else {
+            turnLbl.innerText = `玩家 ${gameState.current_player + 1} 的回合`;
         }
-    }
 
-    // 3. 渲染玩家陣營面板
-    let pBoard = document.getElementById('players-board');
-    pBoard.innerHTML = '';
-    gameState.players.forEach((p, idx) => {
-        let isCurrent = (idx === gameState.current_player && !gameState.auction_active);
-        let isCurrentBidder = (idx === gameState.current_bidder && gameState.auction_active);
+        // 2. 渲染拍賣區
+        let trackBox = document.getElementById('auction-track-box');
+        trackBox.innerHTML = '';
 
-        let statusClass = "";
-        if (isCurrent) statusClass = "player-card-active";
-        if (isCurrentBidder) statusClass = "player-card-bidder";
+        for (let i = 0; i < 8; i++) {
+            if (gameState.auction_track && i < gameState.auction_track.length) {
+                let tile = gameState.auction_track[i];
+                let wrapper = document.createElement('div');
+                wrapper.className = "flex flex-col items-center w-20";
 
-        let card = document.createElement('div');
-        card.className = `custom-player-card transition-all duration-200 hover:scale-[1.02] cursor-pointer ${statusClass}`;
-        card.setAttribute('onclick', `openHandModal(${p.player_id})`);
+                let img = document.createElement('div');
+                if (isGodExchangeMode) {
+                    img.className = "w-20 h-20 rounded-xl border-2 border-purple-400 animate-pulse cursor-pointer ring-4 ring-purple-500/30";
+                    img.setAttribute('onclick', `executeGodExchange(${i}, '${tile.name}')`);
+                } else {
+                    img.className = "w-20 h-20 rounded-xl border-2 border-amber-500 shadow-lg bg-gray-900";
+                }
 
-        card.innerHTML = `
+                const currentType = (tile.type_id !== undefined) ? tile.type_id : tile.type;
+                const currentValue = (tile.value_id !== undefined) ? tile.value_id : tile.value;
+                img.style.backgroundImage = `url('${getTileImageUrl(currentType, currentValue)}')`;
+                img.style.backgroundSize = "cover";
+
+                let nameLabel = document.createElement('p');
+                nameLabel.innerText = cleanTileName(tile.display_name || tile.name);
+                nameLabel.className = "text-[12px] font-black bg-amber-100/90 text-black px-1 py-0.5 rounded shadow-sm text-center w-full truncate mt-1";
+
+                wrapper.appendChild(img);
+                wrapper.appendChild(nameLabel);
+                trackBox.appendChild(wrapper);
+            }
+        }
+
+        // 3. 渲染玩家陣營面板
+        let pBoard = document.getElementById('players-board');
+        pBoard.innerHTML = '';
+        gameState.players.forEach((p, idx) => {
+            let isCurrent = (idx === gameState.current_player && !gameState.auction_active);
+            let isCurrentBidder = (idx === gameState.current_bidder && gameState.auction_active);
+
+            let statusClass = "";
+            if (isCurrent) statusClass = "player-card-active";
+            if (isCurrentBidder) statusClass = "player-card-bidder";
+
+            let card = document.createElement('div');
+            card.className = `custom-player-card transition-all duration-200 hover:scale-[1.02] cursor-pointer ${statusClass}`;
+            card.setAttribute('onclick', `openHandModal(${p.player_id})`);
+
+            card.innerHTML = `
             <div class="flex justify-between items-center mb-3">
                 <div class="flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full ${isCurrent ? 'bg-yellow-600 animate-pulse' : (isCurrentBidder ? 'bg-purple-600 animate-pulse' : 'bg-gray-600')}"></span>
@@ -446,66 +418,78 @@ function renderUI() {
                 </div>
             </div>
         `;
-        pBoard.appendChild(card);
-    });
+            pBoard.appendChild(card);
+        });
 
-    // 4. 更新按鈕狀態
-    const drawBtn = document.getElementById('btn-draw');
-    const raBtn = document.getElementById('btn-call-ra');
-    const godBtn = document.getElementById('btn-use-god');
-    const disabledClass = "custom-orange-btn opacity-50 cursor-not-allowed";
+        // 4. 更新按鈕狀態
+        const drawBtn = document.getElementById('btn-draw');
+        const raBtn = document.getElementById('btn-call-ra');
+        const godBtn = document.getElementById('btn-use-god');
+        const disabledClass = "custom-orange-btn opacity-50 cursor-not-allowed";
 
-    if (gameState.auction_active || isGodExchangeMode) {
-        if (drawBtn) drawBtn.className = disabledClass;
-        if (raBtn) raBtn.className = disabledClass;
-        if (godBtn) {
-            if (isGodExchangeMode) {
-                godBtn.className = "custom-orange-btn bg-red-800";
-                godBtn.innerText = "❌ 取消神明交換";
-                godBtn.disabled = false;
-            } else {
-                godBtn.className = disabledClass;
-                godBtn.disabled = true;
+        if (gameState.auction_active || isGodExchangeMode) {
+            if (drawBtn) {
+                drawBtn.className = disabledClass;
+                drawBtn.disabled = true; // 🎯【修正】：補上真實禁用，防止在神明模式下被穿透點擊
             }
-        }
-    } else {
-        if (drawBtn) drawBtn.className = "custom-orange-btn";
-        if (raBtn) raBtn.className = "custom-orange-btn";
-        const curPlayerStruct = gameState.players[gameState.current_player];
-        const hasGodTile = curPlayerStruct && curPlayerStruct.hand_tiles && curPlayerStruct.hand_tiles.some(t => t.type === 6);
-        const hasAuctionItems = gameState.auction_track && gameState.auction_track.length > 0;
-        if (godBtn) {
-            godBtn.innerText = "🏛️ 使用神明板塊";
-            if (hasGodTile && hasAuctionItems) {
-                godBtn.className = "custom-orange-btn";
-                godBtn.disabled = false;
-            } else {
-                godBtn.className = disabledClass;
-                godBtn.disabled = true;
+            if (raBtn) {
+                raBtn.className = disabledClass;
+                raBtn.disabled = true;  // 🎯【修正】：補上真實禁用
             }
-        }
-    }
-
-    // 5. 檢查競標視窗狀態
-    if (gameState.auction_active) {
-        const modal = document.getElementById('auction-modal');
-        if (modal && (modal.classList.contains('hidden') || modal.style.display === 'none' || window.getComputedStyle(modal).display === 'none')) {
-            if (typeof openAuctionModal === "function") {
-                openAuctionModal();
+            if (godBtn) {
+                if (isGodExchangeMode) {
+                    godBtn.className = "custom-orange-btn bg-red-800";
+                    godBtn.innerText = "❌ 取消神明交換";
+                    godBtn.disabled = false;
+                } else {
+                    godBtn.className = disabledClass;
+                    godBtn.disabled = true;
+                }
             }
-        }
-    }
-
-    // 6. 新增：控制返回主選單按鈕的顯示/隱藏
-    const menuBtn = document.getElementById('menu-btn-container');
-    if (menuBtn) {
-        if (gameState.auction_active) {
-            menuBtn.classList.add('hidden');
         } else {
-            menuBtn.classList.remove('hidden');
+            if (drawBtn) {
+                drawBtn.className = "custom-orange-btn";
+                drawBtn.disabled = false; // 🎯【修正】：恢復可用狀態
+            }
+            if (raBtn) {
+                raBtn.className = "custom-orange-btn";
+                raBtn.disabled = false; // 🎯【修正】：恢復可用狀態
+            }
+            const curPlayerStruct = gameState.players[gameState.current_player];
+            const hasGodTile = curPlayerStruct && curPlayerStruct.hand_tiles && curPlayerStruct.hand_tiles.some(t => t.type === 6);
+            const hasAuctionItems = gameState.auction_track && gameState.auction_track.length > 0;
+            if (godBtn) {
+                godBtn.innerText = "🏛️ 使用神明板塊";
+                if (hasGodTile && hasAuctionItems) {
+                    godBtn.className = "custom-orange-btn";
+                    godBtn.disabled = false;
+                } else {
+                    godBtn.className = disabledClass;
+                    godBtn.disabled = true;
+                }
+            }
+        }
+
+        // 5. 檢查競標視窗狀態
+        if (gameState.auction_active) {
+            const modal = document.getElementById('auction-modal');
+            if (modal && (modal.classList.contains('hidden') || modal.style.display === 'none' || window.getComputedStyle(modal).display === 'none')) {
+                if (typeof openAuctionModal === "function") {
+                    openAuctionModal();
+                }
+            }
+        }
+
+        // 6. 控制返回主選單按鈕的顯示/隱藏
+        const menuBtn = document.getElementById('menu-btn-container');
+        if (menuBtn) {
+            if (gameState.auction_active) {
+                menuBtn.classList.add('hidden');
+            } else {
+                menuBtn.classList.remove('hidden');
+            }
         }
     }
-}
 
     async function drawTile() {
         if (gameState && gameState.auction_active) {
@@ -513,26 +497,38 @@ function renderUI() {
             return;
         }
 
-        let res = await fetch('/api/draw', { method: 'POST' });
-        let data = await res.json();
+        try {
+            let res = await fetch('/api/draw', { method: 'POST' });
+            let data = await res.json();
 
-        gameState = data.game_state;
-        renderUI();
-
-        if (gameState && gameState.auction_active) {
-            if (gameState.auction_count >= 8) {
-                alert("🚨 警告：拍賣軌道 8 格已滿！天神發怒，立刻強制進入大會競標程序！");
-            }
-            else if (data.drawn_tile && data.drawn_tile.type === 0) {
-                alert(" 抽到太陽神 Ra 板塊！全體玩家請進入競標對話框出價！");
-            }
-            else if (gameState.forced_auction) {
-                alert("🏛️ 太陽神事件觸發強制競標！");
+            if (!res.ok || data.success === false) {
+                alert("❌ 抽牌失敗：" + (data.error || "未知錯誤"));
+                return;
             }
 
-            if (typeof openAuctionModal === "function") {
-                openAuctionModal();
+            gameState = data.game_state;
+            renderUI();
+
+            if (gameState && gameState.auction_active) {
+                // 🎯【優化】：改用前端精準的陣列長度判定，提高防禦性
+                const currentTrackLen = gameState.auction_track ? gameState.auction_track.length : 0;
+                if (currentTrackLen >= 8) {
+                    alert("🚨 警告：拍賣軌道 8 格已滿！天神發怒，立刻強制進入大會競標程序！");
+                }
+                else if (data.drawn_tile && data.drawn_tile.type === 0) {
+                    alert(" 抽到太陽神 Ra 板塊！全體玩家請進入競標對話框出價！");
+                }
+                else if (gameState.forced_auction) {
+                    alert("🏛️ 太陽神事件觸發強制競標！");
+                }
+
+                if (typeof openAuctionModal === "function") {
+                    openAuctionModal();
+                }
             }
+        } catch (error) {
+            console.error("Error drawing tile:", error);
+            alert("無法連線至伺服器，請檢查後端後台日誌。");
         }
     }
 
@@ -542,15 +538,24 @@ function renderUI() {
             return;
         }
 
-        let res = await fetch('/api/invoke_auction', { method: 'POST' });
-        if (res.status === 400) { alert((await res.json()).error || "無法發起競標"); return; }
-        let data = await res.json();
+        try {
+            let res = await fetch('/api/invoke_auction', { method: 'POST' });
+            let data = await res.json();
+            
+            if (!res.ok) { 
+                alert("❌ 無法發起競標：" + (data.error || "不符合發起條件")); 
+                return; 
+            }
 
-        gameState = data.game_state;
-        renderUI();
+            gameState = data.game_state;
+            renderUI();
 
-        if (gameState.auction_active && typeof openAuctionModal === "function") {
-            openAuctionModal();
+            if (gameState.auction_active && typeof openAuctionModal === "function") {
+                openAuctionModal();
+            }
+        } catch (error) {
+            console.error("Error invoking auction:", error);
+            alert("無法連線至伺服器，請檢查後端後台日誌。");
         }
     }
 
@@ -632,11 +637,12 @@ function renderUI() {
             const data = await response.json();
 
             if (response.ok && data.status === "success") {
-                const wasAuctionActive = (gameState.auction_active !== 0);
+                // 🎯【修正】：使用布林反轉 (!!) 進行黑盒相容判定，不再鎖死於數字 0，徹底避開 JS 隱形全等坑
+                const wasAuctionActive = !!gameState.auction_active; 
                 gameState = data.game_state;
                 renderUI();
 
-                const isAuctionJustEnded = (wasAuctionActive && gameState.auction_active === 0);
+                const isAuctionJustEnded = (wasAuctionActive && !gameState.auction_active);
 
                 if (isAuctionJustEnded) {
                     const auctionModal = document.getElementById('auction-modal');

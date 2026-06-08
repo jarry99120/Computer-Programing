@@ -36,10 +36,9 @@ void shuffle_deck(Tile *deck, int size) {
     }
 }
 
-// 取得不同人數下的太陽船軌道上限
+// 取得不同人數下的太陽船軌道上限（🎯 已全面統一改為 9）
 static int ra_track_max(int num_players) {
-    int maxes[] = {0, 0, 6, 8, 9, 10};
-    return maxes[num_players];
+    return 9;
 }
 
 // 遊戲初始化
@@ -85,7 +84,7 @@ void init_game(GameState* gs, int num_players) {
     }
     for (int i = 0; i < 12; i++) {
         gs->deck[deck_idx].type = TILE_FLOOD; 
-        gs->deck[deck_idx].value = 1;
+            gs->deck[deck_idx].value = 1;
         deck_idx++;
     }
 
@@ -140,7 +139,7 @@ void init_game(GameState* gs, int num_players) {
     for (int p = 0; p < gs->num_players; p++) {
         gs->players[p].player_id = p; 
         gs->players[p].hand_count = 0;
-        gs->players[p].score =5;    
+        gs->players[p].score = 5;    
 
         for (int h = 0; h < 50; h++) {
             gs->players[p].hand[h].type = -1;
@@ -175,8 +174,7 @@ Tile draw_tile(GameState* gs) {
     
     if (drawn.type == TILE_RA) {
         gs->sun_boat_position++;
-        int max_track = ra_track_max(gs->num_players);
-        if (max_track <= 0) max_track = 8; 
+        int max_track = ra_track_max(gs->num_players); // 🎯 這裡會直接拿到固定值 9
 
         if (gs->sun_boat_position >= max_track) {
             printf("[C Core] 太陽船達到上限，觸發時代結束！\n");
@@ -276,7 +274,22 @@ void conduct_auction(GameState* gs, int trigger_player, int is_forced) {
 }
 
 int player_bid(GameState* gs, int player_idx, int sun_value) {
-    if (gs->auction_active == 0 || player_idx != gs->current_bidder) return 0; 
+    
+    // =================================================================
+    // 🛡️ 嚴格防禦區：拆解原本模糊的 return 0，定義清晰的負數錯誤碼
+    // =================================================================
+    if (gs->auction_active == 0) {
+        printf("[C Core] 拒絕出價：目前非競標階段。\n");
+        return -2; 
+    }
+    if (player_idx != gs->current_bidder) {
+        printf("[C Core] 拒絕出價：目前應由玩家 %d 出價，而非玩家 %d。\n", gs->current_bidder + 1, player_idx + 1);
+        return -3; 
+    }
+
+    // =================================================================
+    // 🎲 核心邏輯區
+    // =================================================================
 
     // 主動喊拉發起人保底吞牌機制 (gs->auction_active == 1)
     if (gs->auction_active == 1 && gs->highest_bidder == -1 && player_idx == gs->auction_trigger_player) {
@@ -290,6 +303,7 @@ int player_bid(GameState* gs, int player_idx, int sun_value) {
                 }
             }
             sun_value = min_sun; 
+            printf("[C Core] 發起人主動喊拉且全員 PASS，強制使用最小籌碼 %d 保底吞牌。\n", sun_value);
         }
     }
 
@@ -297,6 +311,9 @@ int player_bid(GameState* gs, int player_idx, int sun_value) {
     if (sun_value > 0 && sun_value > gs->highest_bid) {
         gs->highest_bid = sun_value;
         gs->highest_bidder = player_idx;
+        printf("[C Core] 玩家 %d 成功出價：%d\n", player_idx + 1, sun_value);
+    } else {
+        printf("[C Core] 玩家 %d 選擇 PASS。\n", player_idx + 1);
     }
 
     // 尋找下一位「有可用籌碼」的玩家
@@ -315,11 +332,15 @@ int player_bid(GameState* gs, int player_idx, int sun_value) {
         fix_loop++;
     }
 
+    // =================================================================
+    // 🏁 競標終點判定區
+    // =================================================================
     // 當出價繞完一圈表態完畢
     if (next_bidder == first_bidder || search_count >= gs->num_players) {
         
         // 狀況 A：有人得標
         if (gs->highest_bidder != -1) {
+            printf("[C Core] 競標結束！得標者為玩家 %d，得標金額: %d。\n", gs->highest_bidder + 1, gs->highest_bid);
             resolve_auction_win(gs, gs->highest_bidder, gs->highest_bid);
             return 1; 
         } 
@@ -338,6 +359,7 @@ int player_bid(GameState* gs, int player_idx, int sun_value) {
         }
     }
 
+    // 狀態 C：競標尚未結束，推進到下一位出價者
     gs->current_bidder = next_bidder;
     return 0; 
 }
@@ -365,9 +387,9 @@ int run_auction(GameState* gs, int *bids, int bids_count) {
 // ⏳ 區塊三：時代推進判斷
 // =================================================================
 
+// 判斷時代是否結束（🎯 已全面統一改為 >= 9）
 int is_epoch_over(GameState* gs) {
-    int maxes[] = {0, 0, 6, 8, 9, 10};
-    return gs->sun_boat_position >= maxes[gs->num_players];
+    return gs->sun_boat_position >= 9;
 }
 
 void end_epoch(GameState* gs) {
@@ -436,7 +458,6 @@ void resolve_auction_win(GameState* gs, int winner_idx, int win_bid) {
     }
 
     // 2. 掃描手牌中的災難板塊，並發動效果
-    // 注意：發動災難後，通常災難板塊會被移出手牌（視你的遊戲規則而定）
     for (int i = winner->hand_count - 1; i >= 0; i--) {
         if (winner->hand[i].type == TILE_DISASTER) {
             resolve_disaster_immediate(winner, winner->hand[i].value);
