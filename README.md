@@ -38,7 +38,7 @@ pip install -r requirements.txt
 cd web_server
 python3 app.py
 ```
-You should see:
+   You should see:
 ```
  * Running on http://127.0.0.1:8080
 Press CTRL+C to quit
@@ -47,5 +47,5 @@ Press CTRL+C to quit
 
 > **http://127.0.0.1:8080**
 
-To stop the server, press`Ctrl + C`in the terminal.
+   To stop the server, press`Ctrl + C`in the terminal.
 
