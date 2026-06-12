@@ -2,12 +2,26 @@
 import os
 import ctypes
 
-# 1. 載入 DLL / SO 共享核心庫
+# 1. 載入 DLL / SO 共享核心庫（自動偵測作業系統）
 current_dir = os.path.dirname(os.path.abspath(__file__))
-lib_path = os.path.join(current_dir, "libra_engine.dll")
 
-if not os.path.exists(lib_path):
-    raise FileNotFoundError(f"找不到核心函式庫: {lib_path}")
+if os.name == "nt":  # Windows
+    lib_candidates = ["libra_engine.dll", "libra_engine.so"]
+else:                # Linux / macOS / WSL
+    lib_candidates = ["libra_engine.so", "libra_engine.dll"]
+
+lib_path = None
+for name in lib_candidates:
+    candidate = os.path.join(current_dir, name)
+    if os.path.exists(candidate):
+        lib_path = candidate
+        break
+
+if lib_path is None:
+    raise FileNotFoundError(
+        f"找不到核心函式庫 (libra_engine.so / libra_engine.dll)，"
+        f"請先於 c_engine/ 目錄執行 make 編譯，並將產出複製到: {current_dir}"
+    )
 
 engine = ctypes.CDLL(lib_path)
 
