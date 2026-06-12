@@ -1,12 +1,13 @@
 # Installation and Setup
 
 ## Prerequisites
+```
 Ubuntu 24.04 LTS
 gcc 13.x or above
 make 4.x or above
 Python 3.8 or above
 Flask 3.x or above
-
+```
 ## Setup
 0. Open a WSL Ubuntu Terminal (Windows Users Only).This project must be run inside a Linux (Ubuntu) environment. On Windows, all commands must be executed inside WSL — not in PowerShell or Command Prompt.Run all project commands here.
 
@@ -43,6 +44,8 @@ You should see:
 Press CTRL+C to quit
 ```
 6. Play the Game: Open a browser and go to : 
+
 > **http://127.0.0.1:8080**
+
 To stop the server, press`Ctrl + C`in the terminal.
 
