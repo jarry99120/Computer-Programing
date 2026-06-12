@@ -18,7 +18,7 @@ sudo apt install -y build-essential python3 python3-venv python3-pip
 ```
 2. Download ZIP file: Download the zip file, extract it and `cd` into the profect root directory
 ```
-cd team12
+cd team16
 ```
 3. Compile the C Engine: From the project root,run:
 ```
